@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>World Finance Simulator | Trading Desk</title>
+    <title>World Finance Simulator | Trading View</title>
     <style>
       :root {
         color-scheme: dark;
@@ -16,6 +16,8 @@
         --up: #39e0a2;
         --down: #ff7e98;
         --accent: #64a9ff;
+        --warn: #ffb347;
+        --tab-h: 48px;
       }
       body[data-phase="night"] {
         --bg: #03060c;
@@ -23,414 +25,1400 @@
         --card: #0b1323d9;
         --line: #5d77ad2b;
       }
-      * { box-sizing: border-box; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
-        margin: 0;
         font-family: Inter, system-ui, -apple-system, sans-serif;
         color: var(--text);
         background:
           radial-gradient(circle at 10% -10%, #20355f 0%, transparent 40%),
           radial-gradient(circle at 95% -15%, #1c2855 0%, transparent 34%),
           linear-gradient(170deg, var(--bg-alt), var(--bg));
+        min-height: 100vh;
       }
-      .wrap { max-width: 1680px; margin: 0 auto; padding: 16px; }
-      .top {
+
+      /* ── TOP BAR ── */
+      .topbar {
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        justify-content: space-between;
+        padding: 10px 18px;
+        background: #08111eeb;
+        border-bottom: 1px solid var(--line);
+        position: sticky;
+        top: 0;
+        z-index: 100;
         gap: 12px;
-        margin-bottom: 10px;
+        flex-wrap: wrap;
       }
-      h1 { margin: 0; font-size: 24px; }
-      .muted { color: var(--muted); }
+      .brand { font-weight: 800; font-size: 17px; letter-spacing: -0.5px; white-space: nowrap; }
+      .brand span { color: var(--accent); }
       .pills { display: flex; gap: 8px; flex-wrap: wrap; }
       .pill {
         border: 1px solid var(--line);
         border-radius: 999px;
-        padding: 6px 12px;
-        font-size: 12px;
+        padding: 4px 10px;
+        font-size: 11px;
         background: #0b1526d9;
+        white-space: nowrap;
       }
+      .pill.up { color: var(--up); border-color: #39e0a240; }
+      .pill.down { color: var(--down); border-color: #ff7e9840; }
+
+      /* ── TABS ── */
+      .tabs {
+        display: flex;
+        background: #06101acc;
+        border-bottom: 1px solid var(--line);
+        padding: 0 18px;
+        gap: 2px;
+      }
+      .tab {
+        padding: 12px 18px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        color: var(--muted);
+        border-bottom: 2px solid transparent;
+        transition: color .15s, border-color .15s;
+        white-space: nowrap;
+      }
+      .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+      .tab:hover { color: var(--text); }
+
+      /* ── NEWS TICKER ── */
       .news {
-        border: 1px solid var(--line);
-        border-radius: 10px;
         background: #0a1322d9;
         overflow: hidden;
-        margin-bottom: 12px;
+        border-bottom: 1px solid var(--line);
+        height: 34px;
+        display: flex;
+        align-items: center;
       }
       .news-track {
         white-space: nowrap;
-        padding: 10px 0;
+        padding: 0;
         display: inline-block;
-        animation: ticker 55s linear infinite;
+        animation: ticker 70s linear infinite;
       }
-      .news-item { margin-right: 32px; color: #caddff; font-size: 13px; }
+      .news-item { margin-right: 36px; color: #caddff; font-size: 12px; }
       @keyframes ticker {
         0% { transform: translateX(0%); }
         100% { transform: translateX(-50%); }
       }
-      .layout {
-        display: grid;
-        grid-template-columns: 2.7fr 1fr;
-        gap: 12px;
-      }
+
+      /* ── PAGES ── */
+      .page { display: none; padding: 14px 18px; }
+      .page.active { display: block; }
+
+      /* ── CARDS ── */
       .card {
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 12px;
-        padding: 12px;
+        padding: 14px;
         backdrop-filter: blur(10px);
       }
-      .chart-wrap canvas {
-        width: 100%;
-        height: 560px;
-        border-radius: 10px;
-        background: #060d1abf;
-        border: 1px solid var(--line);
+      .card-title {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+        color: var(--muted);
+        margin-bottom: 10px;
       }
-      .meta { font-size: 13px; margin-top: 8px; color: var(--muted); }
-      .stats {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(120px, 1fr));
-        gap: 10px;
-        margin-top: 10px;
+
+      /* ── TRADING PAGE LAYOUT ── */
+      #page-trading {
+        display: none;
+        grid-template-columns: 1fr 300px;
+        grid-template-rows: auto 1fr auto;
+        gap: 12px;
+        height: calc(100vh - var(--tab-h) - 34px - 58px);
       }
-      .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #0b1424b3; }
-      .label { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
-      .value { font-weight: 700; font-size: 16px; }
-      .trade-grid {
-        margin-top: 10px;
+      #page-trading.active {
         display: grid;
-        grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr auto;
+      }
+      .chart-panel {
+        grid-column: 1;
+        grid-row: 1 / 3;
+        display: flex;
+        flex-direction: column;
         gap: 8px;
       }
-      input, select, button {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 8px;
-        background: #0a1322;
-        color: var(--text);
+      .chart-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
       }
-      button { background: linear-gradient(120deg, #2f79ff, #60bcff); border: 0; font-weight: 600; }
-      .status { min-height: 18px; margin-top: 8px; color: #8dc7ff; font-size: 12px; }
-      .side-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-      .stock-list { display: grid; gap: 8px; max-height: 790px; overflow: auto; }
+      .stock-select-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .price-display { font-size: 24px; font-weight: 800; }
+      .price-change {
+        font-size: 13px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 6px;
+      }
+      .price-change.up { background: #39e0a220; color: var(--up); }
+      .price-change.down { background: #ff7e9820; color: var(--down); }
+      .interval-btns { display: flex; gap: 4px; margin-left: auto; }
+      .ibtn {
+        padding: 5px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .15s;
+      }
+      .ibtn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+      .ibtn:hover:not(.active) { background: #1a2f50; color: var(--text); }
+
+      .chart-canvas-wrap {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        background: #040912bf;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      #chart {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .chart-overlay {
+        position: absolute;
+        top: 8px; right: 10px;
+        font-size: 11px;
+        color: var(--muted);
+        pointer-events: none;
+      }
+
+      /* ── STAT STRIP ── */
+      .stat-strip {
+        grid-column: 1;
+        grid-row: 3;
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+      }
+      .stat-card {
+        background: #0b1424b3;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 10px;
+      }
+      .stat-label { color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; margin-bottom: 3px; }
+      .stat-value { font-weight: 700; font-size: 15px; }
+
+      /* ── SIDE PANEL (stock list) ── */
+      .side-panel {
+        grid-column: 2;
+        grid-row: 1 / 4;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        overflow: hidden;
+      }
+      .side-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .stock-list {
+        flex: 1;
+        overflow-y: auto;
+        display: grid;
+        gap: 6px;
+        padding-right: 2px;
+      }
+      .stock-list::-webkit-scrollbar { width: 4px; }
+      .stock-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
       .stock-row {
         border: 1px solid var(--line);
         border-radius: 10px;
         padding: 8px;
         background: #091223c7;
         cursor: pointer;
+        transition: border-color .15s, background .15s;
       }
-      .stock-row.active { border-color: #6bb7ff99; background: #10213ccf; }
-      .stock-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-      .ticker { font-weight: 700; color: #b4d9ff; }
-      .tiny { font-size: 11px; color: var(--muted); }
-      .spark { width: 100%; height: 60px; border-radius: 6px; background: #050c18c9; }
-      .stock-bottom { margin-top: 5px; display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
-      .bottom { margin-top: 12px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
-      .small-list { margin: 0; padding-left: 16px; max-height: 210px; overflow: auto; }
+      .stock-row:hover { background: #0f1e35c9; }
+      .stock-row.active { border-color: #6bb7ff88; background: #10213ccf; }
+      .stock-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+      .ticker { font-weight: 700; font-size: 13px; color: #b4d9ff; }
+      .tiny { font-size: 10px; color: var(--muted); }
+      .spark { width: 100%; height: 48px; border-radius: 5px; background: #050c18c9; }
+      .stock-bottom {
+        margin-top: 4px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: var(--muted);
+        gap: 4px;
+      }
+      .stab-bar {
+        width: 100%;
+        height: 3px;
+        background: #1a2f50;
+        border-radius: 2px;
+        margin-top: 4px;
+        overflow: hidden;
+      }
+      .stab-fill { height: 100%; border-radius: 2px; transition: width .4s; }
+
+      /* ── TRADE FORM ── */
+      .trade-card {
+        grid-column: 2;
+        /* already inside side-panel */
+        flex-shrink: 0;
+      }
+      .trade-row { display: flex; gap: 6px; flex-wrap: wrap; }
+      input, select, button {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 7px 9px;
+        background: #0a1322;
+        color: var(--text);
+        font-size: 12px;
+        outline: none;
+      }
+      input:focus, select:focus { border-color: var(--accent); }
+      .btn-buy { background: linear-gradient(120deg, #1e6b3c, #39e0a2); border: 0; font-weight: 700; cursor: pointer; }
+      .btn-sell { background: linear-gradient(120deg, #7a1c37, #ff7e98); border: 0; font-weight: 700; cursor: pointer; }
+      .status-msg { min-height: 16px; margin-top: 6px; font-size: 11px; color: #8dc7ff; }
+
+      /* ── MARKETS PAGE ── */
+      .markets-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
+      }
+      .mkt-card {
+        background: #091223c7;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        cursor: pointer;
+        transition: border-color .15s;
+      }
+      .mkt-card:hover { border-color: var(--accent); }
+      .mkt-ticker { font-weight: 800; font-size: 15px; color: #b4d9ff; }
+      .mkt-name { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+      .mkt-price { font-size: 18px; font-weight: 700; margin: 4px 0; }
+      .mkt-change { font-size: 12px; font-weight: 600; }
+      .mkt-spark { width: 100%; height: 44px; border-radius: 5px; background: #050c18; margin: 8px 0; }
+      .mkt-meta { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
+      .pressure-bars { display: flex; gap: 3px; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+      .pressure-buy { background: var(--up); }
+      .pressure-sell { background: var(--down); }
+      .badge {
+        display: inline-block;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .badge.stable { background: #39e0a220; color: var(--up); }
+      .badge.volatile { background: #ffb34720; color: var(--warn); }
+      .badge.risky { background: #ff7e9820; color: var(--down); }
+
+      .markets-top {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .index-card {
+        background: #091223c7;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        text-align: center;
+      }
+      .index-val { font-size: 22px; font-weight: 800; }
+      .breadth-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 12px;
+      }
+      .breadth-bar {
+        flex: 1;
+        height: 8px;
+        background: #1a2f50;
+        border-radius: 4px;
+        overflow: hidden;
+        display: flex;
+      }
+
+      /* ── COMPANY PAGE ── */
+      .company-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .company-title { font-size: 22px; font-weight: 800; }
+      .company-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+      .valuation-big { font-size: 28px; font-weight: 800; color: var(--accent); }
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .kpi-card {
+        background: #0b1424b3;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .kpi-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+      .kpi-value { font-size: 18px; font-weight: 700; }
+      .company-layout {
+        display: grid;
+        grid-template-columns: 1.6fr 1fr;
+        gap: 12px;
+      }
+      .meter-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        font-size: 12px;
+      }
+      .meter-label { width: 120px; color: var(--muted); flex-shrink: 0; }
+      .meter-bar {
+        flex: 1;
+        height: 7px;
+        background: #1a2f50;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .meter-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+      .meter-val { width: 45px; text-align: right; font-weight: 600; }
+
+      /* ── ECONOMY PAGE ── */
+      .eco-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .eco-row {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .gauge-wrap { text-align: center; padding: 8px 0; }
+      .gauge-val { font-size: 28px; font-weight: 800; }
+      .gauge-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; margin-top: 4px; }
+      .gauge-bar { width: 100%; height: 8px; background: #1a2f50; border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
+      .gauge-fill { height: 100%; border-radius: 4px; transition: width .6s; }
+      .commodity-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 13px;
+      }
+      .commodity-row:last-child { border-bottom: none; }
+      .country-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .country-card {
+        background: #091223c7;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 11px;
+      }
+      .country-name { font-weight: 700; margin-bottom: 4px; }
       .chip {
         display: inline-block;
-        margin-right: 6px;
-        margin-bottom: 6px;
-        padding: 5px 8px;
+        margin: 3px;
+        padding: 4px 8px;
         border-radius: 999px;
         border: 1px solid var(--line);
-        font-size: 12px;
+        font-size: 11px;
         background: #0b1526;
       }
-      @media (max-width: 1280px) {
-        .layout, .bottom { grid-template-columns: 1fr; }
-        .trade-grid { grid-template-columns: 1fr 1fr; }
+
+      /* ── RESPONSIVE ── */
+      @media (max-width: 1100px) {
+        #page-trading {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto auto auto auto;
+          height: auto;
+        }
+        .chart-panel { grid-column: 1; grid-row: 1; }
+        .stat-strip { grid-column: 1; grid-row: 2; grid-template-columns: repeat(3, 1fr); }
+        .side-panel { grid-column: 1; grid-row: 3; flex-direction: row; flex-wrap: wrap; max-height: none; }
+        .stock-list { max-height: 300px; }
+        .company-layout { grid-template-columns: 1fr; }
+        .eco-grid { grid-template-columns: repeat(2, 1fr); }
+        .eco-row { grid-template-columns: 1fr; }
+        .country-grid { grid-template-columns: repeat(2, 1fr); }
+        .markets-top { grid-template-columns: repeat(2, 1fr); }
+      }
+      @media (max-width: 700px) {
+        .stat-strip { grid-template-columns: repeat(2, 1fr); }
+        .markets-grid { grid-template-columns: 1fr 1fr; }
+        .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+        .eco-grid { grid-template-columns: 1fr; }
+        .markets-top { grid-template-columns: 1fr 1fr; }
       }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <div class="top">
-        <div>
-          <h1>World Finance Simulator — TradingView Style</h1>
-          <div class="muted">Clean realtime market screen with large chart, session cycle, and live event tape.</div>
-        </div>
-        <div class="pills">
-          <div class="pill" id="clock">--</div>
-          <div class="pill" id="session">Session --</div>
-          <div class="pill" id="participants">Participants --</div>
-        </div>
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="brand">World <span>Finance</span> Simulator</div>
+      <div class="pills">
+        <div class="pill" id="clock">Tick --</div>
+        <div class="pill" id="session">Session --</div>
+        <div class="pill" id="indexPill">GLOBAL100 --</div>
+        <div class="pill" id="participantPill">-- participants</div>
       </div>
+    </header>
 
-      <div class="news">
-        <div class="news-track" id="newsTicker">Loading market news…</div>
-      </div>
+    <!-- TABS -->
+    <nav class="tabs">
+      <div class="tab active" data-tab="trading">📈 Trading</div>
+      <div class="tab" data-tab="markets">🏦 Markets</div>
+      <div class="tab" data-tab="company">🏢 Company</div>
+      <div class="tab" data-tab="economy">🌐 Economy</div>
+    </nav>
 
-      <section class="layout">
-        <div>
-          <div class="card chart-wrap">
-            <canvas id="chart" width="1400" height="560"></canvas>
-            <div class="meta" id="selectedStockMeta">Select a stock from the side list.</div>
+    <!-- NEWS TICKER -->
+    <div class="news">
+      <div class="news-track" id="newsTicker">Loading market news…</div>
+    </div>
 
-            <div class="stats">
-              <div class="stat"><div class="label">GLOBAL100</div><div class="value" id="indexValue">--</div></div>
-              <div class="stat"><div class="label">GDP</div><div class="value" id="gdp">--</div></div>
-              <div class="stat"><div class="label">Inflation</div><div class="value" id="inflation">--</div></div>
-              <div class="stat"><div class="label">Unemployment</div><div class="value" id="unemployment">--</div></div>
-              <div class="stat"><div class="label">Geo Tension</div><div class="value" id="tension">--</div></div>
-              <div class="stat"><div class="label">Sentiment</div><div class="value" id="sentiment">--</div></div>
-            </div>
+    <!-- ════════ PAGE: TRADING ════════ -->
+    <div id="page-trading" class="page active">
 
-            <div class="trade-grid">
-              <select id="tradeCompany"></select>
-              <select id="tradeSide"><option value="buy">Buy</option><option value="sell">Sell</option></select>
-              <select id="tradeType"><option value="limit">Limit</option><option value="market">Market</option></select>
-              <input id="tradeQty" type="number" min="1" value="100" />
-              <input id="tradePrice" type="number" step="0.0001" placeholder="Limit price" />
-              <button id="tradeBtn">Submit</button>
-            </div>
-            <div class="status" id="tradeStatus"></div>
+      <!-- Left: Chart Panel -->
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="stock-select-group">
+            <select id="chartCompany" style="font-size:13px;font-weight:700;min-width:160px"></select>
+            <span class="price-display" id="chartPrice">--</span>
+            <span class="price-change" id="chartChange">--</span>
+          </div>
+          <div class="interval-btns">
+            <button class="ibtn active" data-interval="5">5M</button>
+            <button class="ibtn" data-interval="15">15M</button>
+            <button class="ibtn" data-interval="60">1H</button>
           </div>
         </div>
 
-        <div class="card">
+        <div class="chart-canvas-wrap" id="chartWrap">
+          <canvas id="chart"></canvas>
+          <div class="chart-overlay" id="chartOverlay"></div>
+        </div>
+      </div>
+
+      <!-- Right: Stock List + Trade -->
+      <div class="side-panel">
+        <div class="card" style="flex:1;overflow:hidden;display:flex;flex-direction:column;gap:8px;">
           <div class="side-header">
-            <h3 style="margin:0">Stocks</h3>
-            <span class="tiny">Each item includes mini chart</span>
+            <span style="font-weight:700;font-size:13px">Stocks</span>
+            <span class="tiny" id="stockCount">-- stocks</span>
           </div>
           <div class="stock-list" id="stockList"></div>
         </div>
-      </section>
 
-      <section class="bottom">
+        <div class="card trade-card">
+          <div class="card-title">Place Order</div>
+          <div style="margin-bottom:6px">
+            <select id="tradeCompany" style="width:100%;margin-bottom:6px"></select>
+          </div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <select id="tradeType" style="flex:1"><option value="market">Market</option><option value="limit">Limit</option></select>
+            <input id="tradeQty" type="number" min="1" value="100" style="flex:1;min-width:70px" placeholder="Qty" />
+          </div>
+          <div class="trade-row" style="margin-bottom:8px">
+            <input id="tradePrice" type="number" step="0.0001" placeholder="Limit price" style="flex:1" disabled />
+          </div>
+          <div class="trade-row">
+            <button class="btn-buy" id="btnBuy" style="flex:1;padding:8px">▲ Buy</button>
+            <button class="btn-sell" id="btnSell" style="flex:1;padding:8px">▼ Sell</button>
+          </div>
+          <div class="status-msg" id="tradeStatus"></div>
+        </div>
+      </div>
+
+      <!-- Bottom: Stats strip -->
+      <div class="stat-strip">
+        <div class="stat-card">
+          <div class="stat-label">GLOBAL100</div>
+          <div class="stat-value" id="sGlobal">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">GDP Growth</div>
+          <div class="stat-value" id="sGdp">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Inflation</div>
+          <div class="stat-value" id="sInflation">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Unemployment</div>
+          <div class="stat-value" id="sUnemp">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Geo Tension</div>
+          <div class="stat-value" id="sTension">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Sentiment</div>
+          <div class="stat-value" id="sSentiment">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PAGE: MARKETS ════════ -->
+    <div id="page-markets" class="page">
+      <div class="markets-top">
+        <div class="index-card">
+          <div class="card-title">GLOBAL100</div>
+          <div class="index-val" id="mGlobal100">--</div>
+          <div class="tiny" id="mGlobal100Chg" style="margin-top:4px">--</div>
+        </div>
+        <div class="index-card">
+          <div class="card-title">Market Breadth</div>
+          <div class="breadth-row">
+            <span style="color:var(--up);font-size:12px;font-weight:700" id="mAdvancing">--</span>
+            <span class="tiny">Adv</span>
+            <div class="breadth-bar" id="mBreadthBar" style="flex:1;height:8px;background:#1a2f50;border-radius:4px;overflow:hidden;display:flex">
+              <div id="mBreadthAdv" style="background:var(--up);height:100%;transition:width .4s"></div>
+              <div id="mBreadthDec" style="background:var(--down);height:100%;transition:width .4s"></div>
+            </div>
+            <span style="color:var(--down);font-size:12px;font-weight:700" id="mDeclining">--</span>
+            <span class="tiny">Dec</span>
+          </div>
+          <div class="tiny" id="mBreadthNote">--</div>
+        </div>
+        <div class="index-card">
+          <div class="card-title">Institutional AUM</div>
+          <div class="index-val" id="mInstAUM" style="font-size:16px">--</div>
+          <div class="tiny" id="mHedgeAUM" style="margin-top:4px">--</div>
+        </div>
+        <div class="index-card">
+          <div class="card-title">Market Sentiment</div>
+          <div class="index-val" id="mSentiment" style="font-size:22px">--</div>
+          <div class="tiny" id="mConsConf" style="margin-top:4px">--</div>
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-bottom:10px">All Stocks</div>
+      <div class="markets-grid" id="marketsGrid"></div>
+    </div>
+
+    <!-- ════════ PAGE: COMPANY ════════ -->
+    <div id="page-company" class="page">
+      <div class="company-header">
+        <div>
+          <div class="company-title" id="cTitle">Select a stock</div>
+          <div class="company-sub" id="cSub">--</div>
+        </div>
+        <div style="text-align:right">
+          <div class="tiny" style="margin-bottom:4px">VALUATION</div>
+          <div class="valuation-big" id="cValuation">--</div>
+          <div class="tiny" id="cSharePrice" style="margin-top:4px">--</div>
+        </div>
+      </div>
+
+      <div class="kpi-grid" id="cKpiGrid">
+        <div class="kpi-card"><div class="kpi-label">Revenue</div><div class="kpi-value" id="cRevenue">--</div></div>
+        <div class="kpi-card"><div class="kpi-label">Profit Margin</div><div class="kpi-value" id="cMargin">--</div></div>
+        <div class="kpi-card"><div class="kpi-label">Growth</div><div class="kpi-value" id="cGrowth">--</div></div>
+        <div class="kpi-card"><div class="kpi-label">P/E Ratio</div><div class="kpi-value" id="cPE">--</div></div>
+        <div class="kpi-card"><div class="kpi-label">Dividend Yield</div><div class="kpi-value" id="cDiv">--</div></div>
+        <div class="kpi-card"><div class="kpi-label">Debt Ratio</div><div class="kpi-value" id="cDebt">--</div></div>
+        <div class="kpi-card"><div class="kpi-label">Market Cap</div><div class="kpi-value" id="cMktCap">--</div></div>
+        <div class="kpi-card"><div class="kpi-label">Volume</div><div class="kpi-value" id="cVolume">--</div></div>
+      </div>
+
+      <div class="company-layout">
+        <div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Performance Meters</div>
+            <div id="cMeters"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Price Chart (last 80 ticks)</div>
+            <canvas id="cChart" style="width:100%;height:180px;border-radius:6px;background:#040912;"></canvas>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Buy / Sell Pressure</div>
+            <div id="cPressure"></div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Order Book Depth</div>
+            <div id="cDepth"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Company Info</div>
+            <div id="cInfo"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PAGE: ECONOMY ════════ -->
+    <div id="page-economy" class="page">
+      <div class="eco-grid">
         <div class="card">
-          <h3 style="margin-top:0">World Systems</h3>
-          <div class="muted" id="systems">Loading...</div>
+          <div class="gauge-wrap">
+            <div class="tiny">GDP GROWTH</div>
+            <div class="gauge-val" id="eGdp">--</div>
+            <div class="gauge-bar"><div class="gauge-fill" id="eGdpBar" style="background:var(--up)"></div></div>
+          </div>
         </div>
         <div class="card">
-          <h3 style="margin-top:0">Top Companies</h3>
-          <ol class="small-list" id="topCompanies"></ol>
-          <h3>Conflict / Treaty Headlines</h3>
-          <div id="headlineChips"></div>
+          <div class="gauge-wrap">
+            <div class="tiny">INFLATION</div>
+            <div class="gauge-val" id="eInflation">--</div>
+            <div class="gauge-bar"><div class="gauge-fill" id="eInflationBar" style="background:var(--warn)"></div></div>
+          </div>
         </div>
-      </section>
+        <div class="card">
+          <div class="gauge-wrap">
+            <div class="tiny">INTEREST RATE</div>
+            <div class="gauge-val" id="eRate">--</div>
+            <div class="gauge-bar"><div class="gauge-fill" id="eRateBar" style="background:var(--accent)"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="gauge-wrap">
+            <div class="tiny">UNEMPLOYMENT</div>
+            <div class="gauge-val" id="eUnemp">--</div>
+            <div class="gauge-bar"><div class="gauge-fill" id="eUnempBar" style="background:var(--down)"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="gauge-wrap">
+            <div class="tiny">GEO TENSION</div>
+            <div class="gauge-val" id="eTension">--</div>
+            <div class="gauge-bar"><div class="gauge-fill" id="eTensionBar" style="background:#ff7e98"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="gauge-wrap">
+            <div class="tiny">SUPPLY PRESSURE</div>
+            <div class="gauge-val" id="eSupply">--</div>
+            <div class="gauge-bar"><div class="gauge-fill" id="eSupplyBar" style="background:var(--warn)"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="eco-row">
+        <div class="card">
+          <div class="card-title">Commodities</div>
+          <div id="eCommodities"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Fund Flows</div>
+          <div id="eFunds"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Country Stability</div>
+        <div class="country-grid" id="eCountries"></div>
+      </div>
+
+      <div class="eco-row">
+        <div class="card">
+          <div class="card-title">Active Conflicts &amp; Treaties</div>
+          <div id="eConflicts"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Recent Market Events</div>
+          <div id="eHeadlines"></div>
+        </div>
+      </div>
     </div>
 
     <script>
+      /* ── utils ── */
       const $ = (id) => document.getElementById(id);
+      const n = (v, d = 2) => Number(v ?? 0).toLocaleString(undefined, { maximumFractionDigits: d });
+      const pct = (v, d = 2) => `${n(v * 100, d)}%`;
+      const col = (v) => (v >= 0 ? "var(--up)" : "var(--down)");
+      const stabBadge = (s) => {
+        if (s >= 0.7) return '<span class="badge stable">STABLE</span>';
+        if (s >= 0.45) return '<span class="badge volatile">VOLATILE</span>';
+        return '<span class="badge risky">RISKY</span>';
+      };
+      const stabColor = (s) => {
+        if (s >= 0.7) return "var(--up)";
+        if (s >= 0.45) return "var(--warn)";
+        return "var(--down)";
+      };
+      const fmtBig = (v) => {
+        v = Number(v ?? 0);
+        if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
+        if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+        if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+        return `$${n(v, 0)}`;
+      };
+
+      /* ── state ── */
       let latestState = null;
       let selectedCompanyId = null;
+      let currentInterval = 5; // ticks per candle group (5=raw, 15=3x, 60=12x)
 
-      function n(v, d = 2) {
-        return Number(v ?? 0).toLocaleString(undefined, { maximumFractionDigits: d });
-      }
-
-      function setStatus(el, message, error = false) {
-        el.textContent = message;
-        el.style.color = error ? "#ff92aa" : "#8dc7ff";
-      }
-
-      async function post(url, payload) {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+      /* ── tab navigation ── */
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+          document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+          tab.classList.add("active");
+          $(`page-${tab.dataset.tab}`).classList.add("active");
+          if (latestState) renderAll(latestState);
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error ?? "Request failed");
-        return data;
+      });
+
+      /* ── interval buttons ── */
+      document.querySelectorAll(".ibtn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".ibtn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          currentInterval = Number(btn.dataset.interval);
+          if (latestState) drawMainChart(getSelectedStock(latestState));
+        });
+      });
+
+      /* ── candle aggregation ── */
+      // interval in sim-minutes; each raw candle ≈ 4.8 sim-min (one tick)
+      // 5M ≈ 1 tick, 15M ≈ 3 ticks, 1H ≈ 12 ticks
+      function aggregateCandles(candles, groupSize) {
+        if (groupSize <= 1) return candles;
+        const out = [];
+        for (let i = 0; i < candles.length; i += groupSize) {
+          const group = candles.slice(i, i + groupSize);
+          if (!group.length) continue;
+          out.push({
+            tick: group[0].tick,
+            open: group[0].open,
+            high: Math.max(...group.map((c) => c.high)),
+            low: Math.min(...group.map((c) => c.low)),
+            close: group[group.length - 1].close,
+            volume: group.reduce((s, c) => s + (c.volume ?? 0), 0)
+          });
+        }
+        return out;
       }
 
-      function drawMainCandles(stock) {
+      function getGroupSize(intervalMins) {
+        // 1 tick ≈ 4.8 sim-minutes
+        return Math.max(1, Math.round(intervalMins / 4.8));
+      }
+
+      /* ── main chart ── */
+      function drawMainChart(stock) {
         const canvas = $("chart");
+        if (!canvas || !stock) return;
+        const wrap = $("chartWrap");
+        canvas.width = wrap.clientWidth || 900;
+        canvas.height = wrap.clientHeight || 500;
         const ctx = canvas.getContext("2d");
         const w = canvas.width;
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = "rgba(4,9,18,0.95)";
+        ctx.fillStyle = "rgba(4,9,18,0.97)";
         ctx.fillRect(0, 0, w, h);
-        if (!stock?.candles?.length) return;
 
-        const candles = stock.candles.slice(-120);
-        const prices = candles.flatMap((c) => [c.low, c.high]);
-        const min = Math.min(...prices);
-        const max = Math.max(...prices);
-        const range = Math.max(0.0001, max - min);
-        const toY = (price) => 22 + ((max - price) / range) * (h - 45);
-        const candleW = Math.max(3, (w - 70) / candles.length - 2);
-
-        ctx.strokeStyle = "rgba(120,150,210,0.25)";
-        for (let i = 0; i <= 6; i += 1) {
-          const y = 20 + ((h - 40) * i) / 6;
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(w, y);
-          ctx.stroke();
+        const raw = stock.candles ?? [];
+        const groupSize = getGroupSize(currentInterval);
+        const candles = aggregateCandles(raw, groupSize).slice(-100);
+        if (!candles.length) {
+          ctx.fillStyle = "var(--muted)";
+          ctx.font = "14px Inter, system-ui";
+          ctx.textAlign = "center";
+          ctx.fillText("Waiting for price data...", w / 2, h / 2);
+          return;
         }
 
+        const prices = candles.flatMap((c) => [c.low, c.high]);
+        const minP = Math.min(...prices);
+        const maxP = Math.max(...prices);
+        const range = Math.max(0.0001, maxP - minP);
+        const padL = 58, padR = 12, padT = 20, padB = 28;
+        const plotW = w - padL - padR;
+        const plotH = h - padT - padB;
+        const toY = (p) => padT + ((maxP - p) / range) * plotH;
+        const candleW = Math.max(2, plotW / candles.length - 1.5);
+
+        // grid lines
+        ctx.strokeStyle = "rgba(100,140,200,0.12)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 6; i++) {
+          const y = padT + (plotH * i) / 6;
+          ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+          const price = maxP - (range * i) / 6;
+          ctx.fillStyle = "rgba(167,182,215,0.6)";
+          ctx.font = "9px Inter, system-ui";
+          ctx.textAlign = "right";
+          ctx.fillText(`$${price.toFixed(2)}`, padL - 3, y + 3);
+        }
+
+        // volume bars
+        const maxVol = Math.max(1, ...candles.map((c) => c.volume ?? 0));
+        const volH = plotH * 0.18;
         candles.forEach((candle, i) => {
-          const x = 35 + i * (candleW + 2);
+          const x = padL + i * (candleW + 1.5);
+          const up = candle.close >= candle.open;
+          const volBarH = ((candle.volume ?? 0) / maxVol) * volH;
+          ctx.fillStyle = up ? "rgba(57,224,162,0.18)" : "rgba(255,126,152,0.18)";
+          ctx.fillRect(x, h - padB - volBarH, candleW, volBarH);
+        });
+
+        // candles
+        candles.forEach((candle, i) => {
+          const x = padL + i * (candleW + 1.5);
           const openY = toY(candle.open);
           const closeY = toY(candle.close);
           const highY = toY(candle.high);
           const lowY = toY(candle.low);
           const up = candle.close >= candle.open;
           ctx.strokeStyle = up ? "#39e0a2" : "#ff7e98";
+          ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(x + candleW / 2, highY);
           ctx.lineTo(x + candleW / 2, lowY);
           ctx.stroke();
           ctx.fillStyle = up ? "#39e0a2" : "#ff7e98";
-          ctx.fillRect(x, Math.min(openY, closeY), candleW, Math.max(2, Math.abs(closeY - openY)));
+          const bodyTop = Math.min(openY, closeY);
+          const bodyH = Math.max(1.5, Math.abs(closeY - openY));
+          ctx.fillRect(x, bodyTop, candleW, bodyH);
         });
+
+        // current price line
+        const lastClose = candles.at(-1)?.close ?? 0;
+        const lineY = toY(lastClose);
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "rgba(100,169,255,0.5)";
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(padL, lineY); ctx.lineTo(w - padR, lineY); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(100,169,255,0.8)";
+        ctx.font = "10px Inter, system-ui";
+        ctx.textAlign = "left";
+        ctx.fillText(`$${lastClose.toFixed(4)}`, w - padR + 2, lineY + 3);
+
+        // overlay info
+        $("chartOverlay").textContent = `${stock.ticker}  ·  ${candles.length} bars  ·  ${currentInterval}M interval`;
       }
 
-      function drawSparkline(canvas, candles) {
+      /* ── sparkline ── */
+      function drawSparkline(canvas, candles, color) {
         const ctx = canvas.getContext("2d");
-        const w = canvas.width;
-        const h = canvas.height;
+        const w = canvas.width; const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = "rgba(4,9,18,0.95)";
         ctx.fillRect(0, 0, w, h);
         if (!candles?.length) return;
-
         const line = candles.slice(-40).map((c) => c.close);
-        const min = Math.min(...line);
-        const max = Math.max(...line);
+        const min = Math.min(...line); const max = Math.max(...line);
         const range = Math.max(0.0001, max - min);
+        const strokeColor = color ?? (line.at(-1) >= line[0] ? "#39e0a2" : "#ff7e98");
 
+        // fill
         ctx.beginPath();
-        ctx.lineWidth = 1.6;
-        ctx.strokeStyle = line.at(-1) >= line[0] ? "#39e0a2" : "#ff7e98";
-        line.forEach((value, i) => {
+        line.forEach((v, i) => {
           const x = (i / Math.max(1, line.length - 1)) * w;
-          const y = h - ((value - min) / range) * (h - 6) - 3;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          const y = h - ((v - min) / range) * (h - 6) - 3;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+        ctx.fillStyle = strokeColor === "#39e0a2" ? "rgba(57,224,162,0.08)" : "rgba(255,126,152,0.08)";
+        ctx.fill();
+
+        // line
+        ctx.beginPath();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = strokeColor;
+        line.forEach((v, i) => {
+          const x = (i / Math.max(1, line.length - 1)) * w;
+          const y = h - ((v - min) / range) * (h - 6) - 3;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         });
         ctx.stroke();
       }
 
-      function updateCompanySelect(stocks) {
-        const options = stocks.map((s) => `<option value="${s.companyId}">${s.companyName} (${s.ticker})</option>`).join("");
-        const prev = $("tradeCompany").value || selectedCompanyId;
-        $("tradeCompany").innerHTML = options;
-        if (stocks.some((s) => s.companyId === prev)) $("tradeCompany").value = prev;
+      /* ── helpers ── */
+      function getSelectedStock(state) {
+        const stocks = state.stocks ?? [];
+        return stocks.find((s) => s.companyId === selectedCompanyId) ?? stocks[0] ?? null;
       }
 
-      function renderStockList(stocks) {
-        const list = $("stockList");
-        list.innerHTML = stocks
-          .map((s, i) => `
-            <div class="stock-row ${s.companyId === selectedCompanyId || (!selectedCompanyId && i === 0) ? "active" : ""}" data-company="${s.companyId}">
+      function priceChange(candles) {
+        if (!candles?.length) return 0;
+        const last = candles.at(-1)?.close ?? 0;
+        const prev = candles.at(-2)?.close ?? last;
+        return prev ? (last - prev) / prev : 0;
+      }
+
+      /* ── RENDER TRADING PAGE ── */
+      function renderTrading(state) {
+        const stocks = state.stocks ?? [];
+        if (!selectedCompanyId || !stocks.some((s) => s.companyId === selectedCompanyId)) {
+          selectedCompanyId = stocks[0]?.companyId ?? null;
+        }
+        const sel = getSelectedStock(state);
+
+        // update stock company select
+        const opts = stocks.map((s) => `<option value="${s.companyId}">${s.ticker} – ${s.companyName}</option>`).join("");
+        const prevVal = $("chartCompany").value;
+        $("chartCompany").innerHTML = opts;
+        if (stocks.some((s) => s.companyId === prevVal)) $("chartCompany").value = prevVal;
+        else if (selectedCompanyId) $("chartCompany").value = selectedCompanyId;
+
+        const sameTradeOpts = $("tradeCompany").innerHTML === opts;
+        if (!sameTradeOpts) {
+          $("tradeCompany").innerHTML = opts;
+          if (selectedCompanyId) $("tradeCompany").value = selectedCompanyId;
+        }
+
+        if (sel) {
+          const chg = priceChange(sel.candles);
+          $("chartPrice").textContent = `$${n(sel.lastPrice, 4)}`;
+          $("chartChange").textContent = `${chg >= 0 ? "▲" : "▼"} ${pct(Math.abs(chg))}`;
+          $("chartChange").className = `price-change ${chg >= 0 ? "up" : "down"}`;
+          drawMainChart(sel);
+        }
+
+        // stat strip
+        const idx = state.indexes?.GLOBAL100;
+        $("sGlobal").innerHTML = idx
+          ? `${n(idx.value)} <span style="font-size:11px;color:${idx.changePct >= 0 ? "var(--up)" : "var(--down)"}">${idx.changePct >= 0 ? "+" : ""}${idx.changePct}%</span>`
+          : "--";
+        const gColor = (state.macro?.gdpGrowth ?? 0) >= 0 ? "var(--up)" : "var(--down)";
+        $("sGdp").innerHTML = `<span style="color:${gColor}">${pct(state.macro?.gdpGrowth ?? 0)}</span>`;
+        $("sInflation").textContent = pct(state.macro?.inflation ?? 0);
+        $("sUnemp").textContent = pct(state.macro?.unemployment ?? 0);
+        $("sTension").innerHTML = `<span style="color:${(state.geopolitics?.tension ?? 0) > 0.4 ? "var(--down)" : "var(--up)"}">${pct(state.geopolitics?.tension ?? 0)}</span>`;
+        const sent = state.sentiment ?? 0;
+        $("sSentiment").innerHTML = `<span style="color:${col(sent)}">${sent >= 0 ? "+" : ""}${pct(sent)}</span>`;
+
+        // stock list
+        const sorted = stocks.slice().sort((a, b) => b.marketCap - a.marketCap);
+        $("stockCount").textContent = `${sorted.length} stocks`;
+        $("stockList").innerHTML = sorted.map((s) => {
+          const chg = priceChange(s.candles);
+          const stab = s.stability ?? 0.5;
+          const stabPct = Math.round(stab * 100);
+          return `
+            <div class="stock-row ${s.companyId === selectedCompanyId ? "active" : ""}" data-id="${s.companyId}">
               <div class="stock-top">
                 <div>
-                  <div class="ticker">${s.ticker}</div>
+                  <div class="ticker">${s.ticker} ${stabBadge(stab)}</div>
                   <div class="tiny">${s.companyName}</div>
                 </div>
-                <div class="tiny">$${n(s.lastPrice, 4)}</div>
+                <div style="text-align:right">
+                  <div style="font-weight:700;font-size:13px">$${n(s.lastPrice, 4)}</div>
+                  <div style="font-size:11px;color:${col(chg)}">${chg >= 0 ? "▲" : "▼"} ${pct(Math.abs(chg))}</div>
+                </div>
               </div>
-              <canvas class="spark" id="spark-${s.companyId}" width="330" height="60"></canvas>
+              <canvas class="spark" id="sp-${s.companyId}" width="240" height="48"></canvas>
+              <div class="stab-bar"><div class="stab-fill" style="width:${stabPct}%;background:${stabColor(stab)}"></div></div>
               <div class="stock-bottom">
                 <span>Vol ${n(s.volume, 0)}</span>
-                <span>Stability ${n((s.stability ?? 0) * 100)}%</span>
-                <span>B/S ${(s.buyPressure ?? 0.5).toFixed(2)}/${(s.sellPressure ?? 0.5).toFixed(2)}</span>
+                <span>B ${(s.buyPressure ?? 0.5).toFixed(2)} / S ${(s.sellPressure ?? 0.5).toFixed(2)}</span>
+                <span>Stab ${stabPct}%</span>
+              </div>
+            </div>`;
+        }).join("");
+
+        sorted.forEach((s) => {
+          const c = document.getElementById(`sp-${s.companyId}`);
+          if (c) drawSparkline(c, s.candles);
+        });
+
+        document.querySelectorAll(".stock-row[data-id]").forEach((row) => {
+          row.addEventListener("click", () => {
+            selectedCompanyId = row.dataset.id;
+            renderAll(latestState);
+          });
+        });
+      }
+
+      /* ── RENDER MARKETS PAGE ── */
+      function renderMarkets(state) {
+        const stocks = state.stocks ?? [];
+        const idx = state.indexes?.GLOBAL100;
+
+        $("mGlobal100").textContent = idx ? n(idx.value) : "--";
+        $("mGlobal100Chg").innerHTML = idx
+          ? `<span style="color:${idx.changePct >= 0 ? "var(--up)" : "var(--down)"}">
+              ${idx.changePct >= 0 ? "+" : ""}${idx.changePct}% today
+            </span>`
+          : "--";
+
+        const advancing = stocks.filter((s) => priceChange(s.candles) >= 0).length;
+        const declining = stocks.length - advancing;
+        $("mAdvancing").textContent = advancing;
+        $("mDeclining").textContent = declining;
+        const advPct = stocks.length ? (advancing / stocks.length) * 100 : 50;
+        $("mBreadthAdv").style.width = `${advPct}%`;
+        $("mBreadthDec").style.width = `${100 - advPct}%`;
+        $("mBreadthNote").textContent = `${advancing} advancing · ${declining} declining`;
+
+        $("mInstAUM").textContent = fmtBig(state.funds?.institutionalAUM ?? 0);
+        $("mHedgeAUM").textContent = `Hedge: ${fmtBig(state.funds?.hedgeAUM ?? 0)} · Retail: ${fmtBig(state.funds?.retailLiquidity ?? 0)}`;
+
+        const sent = state.sentiment ?? 0;
+        $("mSentiment").innerHTML = `<span style="color:${col(sent)}">${sent >= 0 ? "Bullish" : "Bearish"}</span>`;
+        $("mConsConf").textContent = `Consumer confidence: ${pct(state.population?.consumerConfidence ?? 0)}`;
+
+        const sorted = (stocks).slice().sort((a, b) => b.marketCap - a.marketCap);
+        $("marketsGrid").innerHTML = sorted.map((s) => {
+          const chg = priceChange(s.candles);
+          const stab = s.stability ?? 0.5;
+          const bp = s.buyPressure ?? 0.5;
+          const sp = s.sellPressure ?? 0.5;
+          const total = bp + sp;
+          const bPct = total ? Math.round((bp / total) * 100) : 50;
+          return `
+            <div class="mkt-card" data-id="${s.companyId}">
+              <div class="mkt-ticker">${s.ticker}</div>
+              <div class="mkt-name">${s.companyName}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div class="mkt-price">$${n(s.lastPrice, 4)}</div>
+                <span class="mkt-change" style="color:${col(chg)}">${chg >= 0 ? "▲" : "▼"} ${pct(Math.abs(chg))}</span>
+              </div>
+              <canvas class="mkt-spark" id="ms-${s.companyId}" width="180" height="44"></canvas>
+              <div class="mkt-meta">
+                <span>Cap: ${fmtBig(s.marketCap)}</span>
+                ${stabBadge(stab)}
+              </div>
+              <div style="margin-top:4px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between">
+                <span style="color:var(--up)">Buy ${bPct}%</span>
+                <span style="color:var(--down)">Sell ${100 - bPct}%</span>
+              </div>
+              <div class="pressure-bars">
+                <div class="pressure-buy" style="width:${bPct}%;height:100%;border-radius:3px 0 0 3px"></div>
+                <div class="pressure-sell" style="width:${100 - bPct}%;height:100%;border-radius:0 3px 3px 0"></div>
+              </div>
+            </div>`;
+        }).join("");
+
+        sorted.forEach((s) => {
+          const c = document.getElementById(`ms-${s.companyId}`);
+          if (c) drawSparkline(c, s.candles);
+        });
+
+        document.querySelectorAll(".mkt-card[data-id]").forEach((card) => {
+          card.addEventListener("click", () => {
+            selectedCompanyId = card.dataset.id;
+            document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+            document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+            document.querySelector('[data-tab="company"]').classList.add("active");
+            $("page-company").classList.add("active");
+            renderAll(latestState);
+          });
+        });
+      }
+
+      /* ── RENDER COMPANY PAGE ── */
+      function renderCompany(state) {
+        const stocks = state.stocks ?? [];
+        const companies = state.companies ?? [];
+        const sel = getSelectedStock(state);
+        if (!sel) return;
+        const co = companies.find((c) => c.id === sel.companyId);
+
+        $("cTitle").textContent = `${sel.companyName} (${sel.ticker})`;
+        $("cSub").textContent = `${co?.sector ?? "--"} · ${co?.country ?? "--"} · ${co?.businessModel ?? "--"}`;
+        $("cValuation").textContent = fmtBig(co?.valuation ?? sel.marketCap);
+        $("cSharePrice").textContent = `Share price: $${n(sel.lastPrice, 4)} · ${n(sel.sharesOutstanding ?? 100_000_000, 0)} shares`;
+
+        $("cRevenue").textContent = fmtBig(co?.revenue ?? 0);
+        $("cMargin").innerHTML = `<span style="color:${(co?.profitMargin ?? 0) >= 0 ? "var(--up)" : "var(--down)"}">${pct(co?.profitMargin ?? 0)}</span>`;
+        $("cGrowth").innerHTML = `<span style="color:${(co?.growth ?? 0) >= 0 ? "var(--up)" : "var(--down)"}">${pct(co?.growth ?? 0)}</span>`;
+        $("cPE").textContent = n(sel.peRatio, 1);
+        $("cDiv").textContent = pct(sel.dividendYield ?? 0);
+        $("cDebt").textContent = pct(co?.debtRatio ?? 0);
+        $("cMktCap").textContent = fmtBig(sel.marketCap);
+        $("cVolume").textContent = n(sel.volume, 0);
+
+        // meters
+        const meters = [
+          { label: "Innovation", val: co?.innovation ?? 0, color: "#64a9ff" },
+          { label: "Reputation", val: co?.reputation ?? 0, color: "#39e0a2" },
+          { label: "AI Capability", val: co?.aiCapability ?? 0, color: "#b88cff" },
+          { label: "Mkt Dominance", val: co?.marketDominance ?? 0, color: "#ffb347" },
+          { label: "Supply Risk", val: co?.supplyRisk ?? 0, color: "#ff7e98", invert: true },
+          { label: "R&D Budget", val: co?.rdBudget ?? 0, max: 0.5, color: "#64a9ff" },
+          { label: "Stability", val: sel.stability ?? 0, color: stabColor(sel.stability ?? 0) },
+        ];
+        $("cMeters").innerHTML = meters.map((m) => {
+          const max = m.max ?? 1;
+          const pctVal = Math.min(100, Math.round((m.val / max) * 100));
+          return `
+            <div class="meter-row">
+              <div class="meter-label">${m.label}</div>
+              <div class="meter-bar"><div class="meter-fill" style="width:${pctVal}%;background:${m.color}"></div></div>
+              <div class="meter-val" style="color:${m.color}">${pctVal}%</div>
+            </div>`;
+        }).join("");
+
+        // pressure
+        const bp = sel.buyPressure ?? 0.5;
+        const sp = sel.sellPressure ?? 0.5;
+        const total = bp + sp;
+        const bpPct = total ? Math.round((bp / total) * 100) : 50;
+        $("cPressure").innerHTML = `
+          <div style="margin-bottom:8px;font-size:13px;display:flex;justify-content:space-between">
+            <span style="color:var(--up)">▲ Buy Pressure: ${bp.toFixed(3)}</span>
+            <span style="color:var(--down)">▼ Sell Pressure: ${sp.toFixed(3)}</span>
+          </div>
+          <div style="height:16px;background:#1a2f50;border-radius:8px;overflow:hidden;display:flex">
+            <div style="width:${bpPct}%;background:var(--up);height:100%;transition:width .4s"></div>
+            <div style="width:${100 - bpPct}%;background:var(--down);height:100%;transition:width .4s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px;color:var(--muted)">
+            <span>Buy ${bpPct}%</span>
+            <span>Sell ${100 - bpPct}%</span>
+          </div>`;
+
+        // order depth
+        const buyDepth = sel.buyDepth ?? 0;
+        const sellDepth = sel.sellDepth ?? 0;
+        const maxDepth = Math.max(1, buyDepth + sellDepth);
+        $("cDepth").innerHTML = `
+          <div class="meter-row">
+            <div class="meter-label">Buy Orders</div>
+            <div class="meter-bar"><div class="meter-fill" style="width:${Math.min(100,(buyDepth/maxDepth)*100)}%;background:var(--up)"></div></div>
+            <div class="meter-val" style="color:var(--up)">${buyDepth}</div>
+          </div>
+          <div class="meter-row">
+            <div class="meter-label">Sell Orders</div>
+            <div class="meter-bar"><div class="meter-fill" style="width:${Math.min(100,(sellDepth/maxDepth)*100)}%;background:var(--down)"></div></div>
+            <div class="meter-val" style="color:var(--down)">${sellDepth}</div>
+          </div>`;
+
+        // company info
+        $("cInfo").innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+            <div><span class="tiny">Country</span><br><b>${co?.country ?? "--"}</b></div>
+            <div><span class="tiny">Sector</span><br><b>${co?.sector ?? "--"}</b></div>
+            <div><span class="tiny">Employees</span><br><b>${n(co?.employees ?? 0, 0)}</b></div>
+            <div><span class="tiny">Carbon Emissions</span><br><b>${n(co?.carbonEmissions ?? 0, 0)} t</b></div>
+            <div><span class="tiny">Short Interest</span><br><b>${pct(sel.shortInterest ?? 0)}</b></div>
+            <div><span class="tiny">Political Influence</span><br><b>${pct(co?.marketDominance ?? 0)}</b></div>
+          </div>`;
+
+        // mini chart
+        const cc = $("cChart");
+        cc.width = cc.offsetWidth || 400;
+        cc.height = 180;
+        drawSparklineDetailed(cc, sel.candles);
+      }
+
+      function drawSparklineDetailed(canvas, candles) {
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width; const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(4,9,18,0.95)";
+        ctx.fillRect(0, 0, w, h);
+        if (!candles?.length) return;
+        const line = candles.slice(-80).map((c) => c.close);
+        const min = Math.min(...line); const max = Math.max(...line);
+        const range = Math.max(0.0001, max - min);
+        const padL = 40, padR = 8, padT = 10, padB = 10;
+
+        ctx.strokeStyle = "rgba(100,140,200,0.12)";
+        for (let i = 0; i <= 4; i++) {
+          const y = padT + ((h - padT - padB) * i) / 4;
+          ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w, y); ctx.stroke();
+          const pv = max - (range * i) / 4;
+          ctx.fillStyle = "rgba(167,182,215,0.5)";
+          ctx.font = "9px Inter";
+          ctx.textAlign = "right";
+          ctx.fillText(`$${pv.toFixed(2)}`, padL - 2, y + 3);
+        }
+
+        const up = line.at(-1) >= line[0];
+        ctx.beginPath();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = up ? "#39e0a2" : "#ff7e98";
+        line.forEach((v, i) => {
+          const x = padL + (i / Math.max(1, line.length - 1)) * (w - padL - padR);
+          const y = padT + ((max - v) / range) * (h - padT - padB);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      /* ── RENDER ECONOMY PAGE ── */
+      function renderEconomy(state) {
+        const macro = state.macro ?? {};
+        const geo = state.geopolitics ?? {};
+        const supply = state.supplyChains ?? {};
+        const funds = state.funds ?? {};
+
+        $("eGdp").innerHTML = `<span style="color:${(macro.gdpGrowth ?? 0) >= 0 ? "var(--up)" : "var(--down)"}">${pct(macro.gdpGrowth ?? 0)}</span>`;
+        $("eGdpBar").style.width = `${Math.min(100, Math.max(0, ((macro.gdpGrowth ?? 0) + 0.1) / 0.18 * 100))}%`;
+        $("eInflation").textContent = pct(macro.inflation ?? 0);
+        $("eInflationBar").style.width = `${Math.min(100, (macro.inflation ?? 0) / 0.18 * 100)}%`;
+        $("eRate").textContent = pct(macro.rate ?? 0);
+        $("eRateBar").style.width = `${Math.min(100, (macro.rate ?? 0) / 0.15 * 100)}%`;
+        $("eUnemp").textContent = pct(macro.unemployment ?? 0);
+        $("eUnempBar").style.width = `${Math.min(100, (macro.unemployment ?? 0) / 0.25 * 100)}%`;
+        $("eTension").textContent = pct(geo.tension ?? 0);
+        $("eTensionBar").style.width = `${Math.min(100, (geo.tension ?? 0) * 100)}%`;
+        $("eSupply").textContent = pct(supply.pressure ?? 0);
+        $("eSupplyBar").style.width = `${Math.min(100, (supply.pressure ?? 0) * 100)}%`;
+
+        // commodities
+        const comms = state.commodities ?? {};
+        $("eCommodities").innerHTML = Object.entries(comms).map(([k, v]) => `
+          <div class="commodity-row">
+            <span style="font-weight:700">${k}</span>
+            <span style="font-weight:700;color:var(--up)">$${n(v.price, 2)}</span>
+          </div>`).join("") || "<div class='tiny'>No data</div>";
+
+        // funds
+        $("eFunds").innerHTML = `
+          <div class="commodity-row"><span>Institutional AUM</span><span style="color:var(--accent)">${fmtBig(funds.institutionalAUM)}</span></div>
+          <div class="commodity-row"><span>Hedge Fund AUM</span><span style="color:var(--accent)">${fmtBig(funds.hedgeAUM)}</span></div>
+          <div class="commodity-row"><span>Retail Liquidity</span><span style="color:var(--accent)">${fmtBig(funds.retailLiquidity)}</span></div>
+          <div class="commodity-row"><span>AI Bot Aggression</span><span style="color:${(funds.aiBotAggression ?? 0) > 0.6 ? "var(--down)" : "var(--up)"}">${pct(funds.aiBotAggression ?? 0)}</span></div>
+          <div class="commodity-row"><span>Consumer Confidence</span><span style="color:var(--up)">${pct(state.population?.consumerConfidence ?? 0)}</span></div>
+          <div class="commodity-row"><span>Policy Pressure</span><span style="color:${(state.policyPressure ?? 0) > 0.5 ? "var(--down)" : "var(--muted)"}">${pct(state.policyPressure ?? 0)}</span></div>`;
+
+        // countries
+        const govs = state.governments ?? {};
+        $("eCountries").innerHTML = Object.entries(govs).map(([country, g]) => `
+          <div class="country-card">
+            <div class="country-name">${country}</div>
+            <div style="font-size:10px;color:var(--muted)">Tax ${pct(g.taxRate ?? 0)} · Sub ${pct(g.subsidy ?? 0)}</div>
+            <div style="margin-top:4px">
+              <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px">
+                <span>Stability</span><span style="color:${stabColor(g.stability ?? 0.5)}">${pct(g.stability ?? 0)}</span>
+              </div>
+              <div style="height:4px;background:#1a2f50;border-radius:2px;overflow:hidden">
+                <div style="width:${Math.round((g.stability ?? 0.5) * 100)}%;height:100%;background:${stabColor(g.stability ?? 0.5)}"></div>
               </div>
             </div>
-          `)
-          .join("");
+          </div>`).join("");
 
-        stocks.forEach((s) => {
-          const canvas = document.getElementById(`spark-${s.companyId}`);
-          if (canvas) drawSparkline(canvas, s.candles);
-        });
+        // conflicts
+        const conflicts = geo.activeConflicts ?? [];
+        const treaties = geo.treaties ?? [];
+        $("eConflicts").innerHTML = `
+          <div style="margin-bottom:8px"><b style="color:var(--down)">Active Conflicts</b><br>
+            ${conflicts.length ? conflicts.map((c) => `<span class="chip" style="border-color:#ff7e9840;color:var(--down)">${c}</span>`).join("") : '<span class="tiny">None active</span>'}
+          </div>
+          <div><b style="color:var(--up)">Treaties</b><br>
+            ${treaties.slice(0, 6).map((t) => `<span class="chip" style="border-color:#39e0a240;color:var(--up)">${t}</span>`).join("") || '<span class="tiny">None signed</span>'}
+          </div>`;
 
-        document.querySelectorAll(".stock-row").forEach((row) => {
-          row.addEventListener("click", () => {
-            selectedCompanyId = row.dataset.company;
-            if (latestState) render(latestState);
-          });
-        });
+        $("eHeadlines").innerHTML = (state.headlines ?? []).slice(0, 8).map((h) => `
+          <div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12px">
+            <span style="color:var(--muted);font-size:10px">Tick ${h.tick}</span><br>${h.headline}
+          </div>`).join("") || "<div class='tiny'>No events yet</div>";
       }
 
-      function renderNewsTicker(headlines) {
-        const text = headlines.length
-          ? headlines.map((h) => `<span class="news-item">📰 ${h.headline}</span>`).join("")
-          : '<span class="news-item">No breaking news.</span>';
-        $("newsTicker").innerHTML = `${text}${text}`;
-      }
-
-      function render(state) {
+      /* ── MASTER RENDER ── */
+      function renderAll(state) {
         latestState = state;
-        const session = state.marketSession ?? { phase: "day", dayNumber: 1 };
-        document.body.dataset.phase = session.phase;
-        $("clock").textContent = `Tick ${state.tick} · ${new Date(state.time).toLocaleString()}`;
-        $("session").textContent = `${session.phase.toUpperCase()} · Day ${session.dayNumber}`;
-        $("participants").textContent = `${n(state.population.count, 0)} participants`;
 
-        $("indexValue").innerHTML = `${n(state.indexes.GLOBAL100.value)} <span style="color:${state.indexes.GLOBAL100.changePct >= 0 ? "#39e0a2" : "#ff7e98"}">${n(state.indexes.GLOBAL100.changePct)}%</span>`;
-        $("gdp").textContent = `${n(state.macro.gdpGrowth * 100)}%`;
-        $("inflation").textContent = `${n(state.macro.inflation * 100)}%`;
-        $("unemployment").textContent = `${n(state.macro.unemployment * 100)}%`;
-        $("tension").textContent = `${n(state.geopolitics.tension * 100)}%`;
-        $("sentiment").textContent = `${n(state.sentiment * 100)}%`;
+        // top bar
+        document.body.dataset.phase = state.marketSession?.phase ?? "day";
+        $("clock").textContent = `Tick ${state.tick} · ${new Date(state.time).toLocaleTimeString()}`;
+        $("session").textContent = `${(state.marketSession?.phase ?? "day").toUpperCase()} · Day ${state.marketSession?.dayNumber ?? 1}`;
+        const idx = state.indexes?.GLOBAL100;
+        if (idx) {
+          $("indexPill").textContent = `GLOBAL100 ${n(idx.value, 0)}`;
+          $("indexPill").className = `pill ${idx.changePct >= 0 ? "up" : "down"}`;
+        }
+        $("participantPill").textContent = `${n(state.population?.count ?? 0, 0)} participants`;
 
-        const stocks = state.stocks.slice().sort((a, b) => b.marketCap - a.marketCap);
-        if (!selectedCompanyId || !stocks.some((s) => s.companyId === selectedCompanyId)) selectedCompanyId = stocks[0]?.companyId ?? null;
-        updateCompanySelect(stocks);
-        renderStockList(stocks);
-
-        const selected = stocks.find((s) => s.companyId === selectedCompanyId) ?? stocks[0];
-        if (selected) {
-          if (!$("tradePrice").value || Number($("tradePrice").value) <= 0) $("tradePrice").value = selected.lastPrice;
-          drawMainCandles(selected);
-          $("selectedStockMeta").textContent = `${selected.companyName} (${selected.ticker}) · Price ${n(selected.lastPrice, 4)} · Market Cap ${n(selected.marketCap)} · P/E ${n(selected.peRatio)} · Volume ${n(selected.volume, 0)} · Stability ${n((selected.stability ?? 0) * 100)}%`;
+        // news
+        const headlines = state.headlines ?? [];
+        if (headlines.length) {
+          const text = headlines.slice(0, 12).map((h) => `<span class="news-item">📰 ${h.headline}</span>`).join("");
+          $("newsTicker").innerHTML = `${text}${text}`;
         }
 
-        renderNewsTicker(state.headlines.slice(0, 12));
-
-        $("systems").innerHTML = `
-          Policy pressure: ${n(state.policyPressure * 100)}%<br>
-          Consumer confidence: ${n(state.population.consumerConfidence * 100)}%<br>
-          Supply pressure: ${n(state.supplyChains.pressure * 100)}%<br>
-          Institutional AUM: ${n(state.funds.institutionalAUM)}<br>
-          Hedge AUM: ${n(state.funds.hedgeAUM)}<br>
-          Retail liquidity: ${n(state.funds.retailLiquidity)}<br>
-          Active conflicts: ${(state.geopolitics.activeConflicts || []).join(", ") || "None"}
-        `;
-
-        $("topCompanies").innerHTML = state.leaderboards.companies.map((c) => `<li>${c.name} — ${n(c.valuation)}</li>`).join("");
-        $("headlineChips").innerHTML = state.headlines.slice(0, 10).map((h) => `<span class="chip">${h.headline}</span>`).join("");
+        const activePage = document.querySelector(".tab.active")?.dataset?.tab ?? "trading";
+        if (activePage === "trading") renderTrading(state);
+        else if (activePage === "markets") renderMarkets(state);
+        else if (activePage === "company") renderCompany(state);
+        else if (activePage === "economy") renderEconomy(state);
       }
+
+      /* ── EVENTS ── */
+      $("chartCompany").addEventListener("change", () => {
+        selectedCompanyId = $("chartCompany").value;
+        if (latestState) renderAll(latestState);
+      });
 
       $("tradeType").addEventListener("change", () => {
-        const isMarket = $("tradeType").value === "market";
-        $("tradePrice").disabled = isMarket;
+        $("tradePrice").disabled = $("tradeType").value === "market";
       });
 
-      $("tradeCompany").addEventListener("change", () => {
-        selectedCompanyId = $("tradeCompany").value;
-        if (latestState) render(latestState);
-      });
-
-      $("tradeBtn").addEventListener("click", async () => {
+      async function postOrder(side) {
+        const status = $("tradeStatus");
         try {
-          const orderType = $("tradeType").value;
-          await post("/api/order", {
-            companyId: $("tradeCompany").value,
-            side: $("tradeSide").value,
-            orderType,
-            quantity: Number($("tradeQty").value || 0),
-            price: orderType === "market" ? undefined : Number($("tradePrice").value || 0),
-            traderId: "player"
+          const type = $("tradeType").value;
+          const qty = Number($("tradeQty").value || 0);
+          const price = type === "market" ? undefined : Number($("tradePrice").value || 0);
+          if (!qty || qty <= 0) throw new Error("Invalid quantity");
+          const res = await fetch("/api/order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ companyId: $("tradeCompany").value, side, orderType: type, quantity: qty, price, traderId: "player" })
           });
-          setStatus($("tradeStatus"), `${orderType === "market" ? "Market" : "Limit"} order submitted.`);
-        } catch (error) {
-          setStatus($("tradeStatus"), error.message, true);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Request failed");
+          status.style.color = "#8dc7ff";
+          status.textContent = `${side === "buy" ? "▲ Buy" : "▼ Sell"} order placed · ${data.trades?.length ?? 0} fill(s)`;
+        } catch (err) {
+          status.style.color = "#ff92aa";
+          status.textContent = err.message;
         }
-      });
+      }
 
+      $("btnBuy").addEventListener("click", () => postOrder("buy"));
+      $("btnSell").addEventListener("click", () => postOrder("sell"));
+
+      /* ── SSE ── */
       const stream = new EventSource("/api/stream");
-      stream.onmessage = (event) => render(JSON.parse(event.data));
-      stream.onerror = () => setStatus($("tradeStatus"), "Realtime stream disconnected. Reconnecting...");
+      stream.onmessage = (e) => renderAll(JSON.parse(e.data));
+      stream.onerror = () => {
+        $("tradeStatus").textContent = "Stream disconnected. Reconnecting...";
+        $("tradeStatus").style.color = "#ff92aa";
+      };
+
+      /* ── resize chart on window resize ── */
+      window.addEventListener("resize", () => {
+        if (latestState) drawMainChart(getSelectedStock(latestState));
+      });
     </script>
   </body>
 </html>

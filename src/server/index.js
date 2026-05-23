@@ -52,7 +52,7 @@ function getSnapshot() {
       stability: stock.stability,
       buyPressure: stock.buyPressure,
       sellPressure: stock.sellPressure,
-      candles: stock.candles.slice(-80),
+      candles: stock.candles.slice(-240),
       buyDepth: state.orderBooks[companyId]?.buy?.length ?? 0,
       sellDepth: state.orderBooks[companyId]?.sell?.length ?? 0
     })),
@@ -65,8 +65,26 @@ function getSnapshot() {
       employees: c.employees,
       revenue: c.kpis.revenue,
       growth: c.kpis.growth,
-      profitMargin: c.kpis.profitMargin
+      profitMargin: c.kpis.profitMargin,
+      debtRatio: c.kpis.debtRatio,
+      innovation: c.innovation,
+      reputation: c.reputation,
+      aiCapability: c.aiCapability,
+      marketDominance: c.marketDominance,
+      supplyRisk: c.supplyRisk,
+      rdBudget: c.rdBudget,
+      carbonEmissions: c.carbonEmissions,
+      businessModel: c.businessModel
     })),
+    commodities: Object.fromEntries(
+      Object.entries(state.commodities).map(([k, v]) => [k, { price: v.price }])
+    ),
+    governments: Object.fromEntries(
+      Object.entries(state.governments ?? {}).map(([country, g]) => [
+        country,
+        { taxRate: g.taxRate, subsidy: g.subsidy, regulation: g.regulation, stability: g.stability }
+      ])
+    ),
     population: {
       count: state.population.participantCount ?? state.population.agents.length,
       consumerConfidence: state.population.consumerConfidence,
