@@ -3,244 +3,213 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>World Finance Simulator | Market OS</title>
+    <title>World Finance Simulator | Trading Desk</title>
     <style>
       :root {
         color-scheme: dark;
-        --bg: #070b15;
-        --bg2: #0c1323;
-        --card: rgba(14, 22, 38, 0.86);
-        --line: rgba(143, 164, 207, 0.2);
-        --text: #edf2ff;
-        --muted: #9ca9c5;
-        --up: #45f6b0;
-        --down: #ff7f9c;
-        --accent: #63adff;
-        --accent2: #8d5bff;
+        --bg: #070c15;
+        --bg-alt: #0e1728;
+        --card: #111b2fcc;
+        --line: #6d86b733;
+        --text: #e7efff;
+        --muted: #a7b6d7;
+        --up: #39e0a2;
+        --down: #ff7e98;
+        --accent: #64a9ff;
+      }
+      body[data-phase="night"] {
+        --bg: #03060c;
+        --bg-alt: #090f1c;
+        --card: #0b1323d9;
+        --line: #5d77ad2b;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-family: Inter, system-ui, -apple-system, sans-serif;
         color: var(--text);
         background:
-          radial-gradient(circle at 12% -10%, #233764 0%, transparent 38%),
-          radial-gradient(circle at 95% -15%, #1f265a 0%, transparent 34%),
-          linear-gradient(170deg, var(--bg2), var(--bg));
+          radial-gradient(circle at 10% -10%, #20355f 0%, transparent 40%),
+          radial-gradient(circle at 95% -15%, #1c2855 0%, transparent 34%),
+          linear-gradient(170deg, var(--bg-alt), var(--bg));
       }
-      .wrap { max-width: 1520px; margin: 0 auto; padding: 20px; }
-      .topbar {
+      .wrap { max-width: 1680px; margin: 0 auto; padding: 16px; }
+      .top {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 16px;
-        margin-bottom: 16px;
+        gap: 12px;
+        margin-bottom: 10px;
       }
-      h1, h2, h3 { margin: 0 0 10px; font-weight: 600; }
+      h1 { margin: 0; font-size: 24px; }
       .muted { color: var(--muted); }
+      .pills { display: flex; gap: 8px; flex-wrap: wrap; }
       .pill {
         border: 1px solid var(--line);
         border-radius: 999px;
         padding: 6px 12px;
         font-size: 12px;
-        background: rgba(99, 173, 255, 0.08);
+        background: #0b1526d9;
       }
-      .nav { display: flex; gap: 8px; margin: 10px 0 16px; flex-wrap: wrap; }
-      .nav button {
-        width: auto;
-        border-radius: 999px;
+      .news {
         border: 1px solid var(--line);
-        padding: 8px 14px;
-        background: rgba(10, 20, 35, 0.9);
-        color: var(--text);
+        border-radius: 10px;
+        background: #0a1322d9;
+        overflow: hidden;
+        margin-bottom: 12px;
       }
-      .nav button.active {
-        background: linear-gradient(120deg, var(--accent2), var(--accent));
-        border: 0;
+      .news-track {
+        white-space: nowrap;
+        padding: 10px 0;
+        display: inline-block;
+        animation: ticker 55s linear infinite;
       }
-      .grid { display: grid; gap: 14px; }
-      .stats { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); margin-bottom: 14px; }
-      .page { display: none; }
-      .page.active { display: block; }
+      .news-item { margin-right: 32px; color: #caddff; font-size: 13px; }
+      @keyframes ticker {
+        0% { transform: translateX(0%); }
+        100% { transform: translateX(-50%); }
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 2.7fr 1fr;
+        gap: 12px;
+      }
       .card {
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 14px;
-        backdrop-filter: blur(14px);
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+        border-radius: 12px;
+        padding: 12px;
+        backdrop-filter: blur(10px);
       }
-      .stat-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-      .stat-value { font-size: 20px; font-weight: 700; }
-      .up { color: var(--up); }
-      .down { color: var(--down); }
-      .market-layout { display: grid; grid-template-columns: 2.1fr 1fr; gap: 12px; }
-      canvas { width: 100%; height: 420px; background: rgba(5, 10, 20, 0.86); border-radius: 10px; border: 1px solid var(--line); }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      th, td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; }
-      th { color: var(--muted); font-weight: 500; }
-      tr:hover { background: rgba(90, 140, 255, 0.08); cursor: pointer; }
-      .ticker { font-weight: 700; color: #9ed1ff; }
-      .split { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
-      .stack { display: grid; gap: 12px; }
-      .form-group { margin-bottom: 8px; }
-      label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
-      input, select, button {
+      .chart-wrap canvas {
         width: 100%;
+        height: 560px;
+        border-radius: 10px;
+        background: #060d1abf;
+        border: 1px solid var(--line);
+      }
+      .meta { font-size: 13px; margin-top: 8px; color: var(--muted); }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(120px, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #0b1424b3; }
+      .label { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+      .value { font-weight: 700; font-size: 16px; }
+      .trade-grid {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr auto;
+        gap: 8px;
+      }
+      input, select, button {
         border: 1px solid var(--line);
         border-radius: 8px;
-        padding: 9px;
+        padding: 8px;
+        background: #0a1322;
         color: var(--text);
-        background: rgba(7, 13, 25, 0.92);
       }
-      button {
-        background: linear-gradient(120deg, #3179ff, #59bbff);
-        color: #fff;
-        border: 0;
-        font-weight: 600;
-      }
-      .list { margin: 0; padding-left: 18px; max-height: 350px; overflow: auto; }
-      .status { min-height: 20px; font-size: 12px; color: #8ec9ff; }
-      .systems-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; }
-      .mini-box {
+      button { background: linear-gradient(120deg, #2f79ff, #60bcff); border: 0; font-weight: 600; }
+      .status { min-height: 18px; margin-top: 8px; color: #8dc7ff; font-size: 12px; }
+      .side-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+      .stock-list { display: grid; gap: 8px; max-height: 790px; overflow: auto; }
+      .stock-row {
         border: 1px solid var(--line);
         border-radius: 10px;
-        padding: 10px;
-        background: rgba(7, 14, 25, 0.7);
+        padding: 8px;
+        background: #091223c7;
+        cursor: pointer;
       }
-      @media (max-width: 1100px) {
-        .market-layout, .split, .systems-grid { grid-template-columns: 1fr; }
+      .stock-row.active { border-color: #6bb7ff99; background: #10213ccf; }
+      .stock-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+      .ticker { font-weight: 700; color: #b4d9ff; }
+      .tiny { font-size: 11px; color: var(--muted); }
+      .spark { width: 100%; height: 60px; border-radius: 6px; background: #050c18c9; }
+      .stock-bottom { margin-top: 5px; display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+      .bottom { margin-top: 12px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+      .small-list { margin: 0; padding-left: 16px; max-height: 210px; overflow: auto; }
+      .chip {
+        display: inline-block;
+        margin-right: 6px;
+        margin-bottom: 6px;
+        padding: 5px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        font-size: 12px;
+        background: #0b1526;
+      }
+      @media (max-width: 1280px) {
+        .layout, .bottom { grid-template-columns: 1fr; }
+        .trade-grid { grid-template-columns: 1fr 1fr; }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <div class="topbar">
+      <div class="top">
         <div>
-          <h1>World Finance Simulator — Market OS</h1>
-          <div class="muted">Realtime global market simulation with clean structured views.</div>
+          <h1>World Finance Simulator — TradingView Style</h1>
+          <div class="muted">Clean realtime market screen with large chart, session cycle, and live event tape.</div>
         </div>
-        <div class="pill" id="clock">--</div>
+        <div class="pills">
+          <div class="pill" id="clock">--</div>
+          <div class="pill" id="session">Session --</div>
+          <div class="pill" id="participants">Participants --</div>
+        </div>
       </div>
 
-      <div class="grid stats">
-        <div class="card"><div class="stat-label">GLOBAL100</div><div id="indexValue" class="stat-value">--</div></div>
-        <div class="card"><div class="stat-label">Player Capital (Limit)</div><div id="playerCapital" class="stat-value">--</div></div>
-        <div class="card"><div class="stat-label">GDP Growth</div><div id="gdp" class="stat-value">--</div></div>
-        <div class="card"><div class="stat-label">Inflation</div><div id="inflation" class="stat-value">--</div></div>
-        <div class="card"><div class="stat-label">Unemployment</div><div id="unemployment" class="stat-value">--</div></div>
-        <div class="card"><div class="stat-label">Geo Tension</div><div id="tension" class="stat-value">--</div></div>
+      <div class="news">
+        <div class="news-track" id="newsTicker">Loading market news…</div>
       </div>
 
-      <div class="nav">
-        <button data-page="markets" class="active">Markets</button>
-        <button data-page="companies">Companies</button>
-        <button data-page="world">World</button>
-      </div>
+      <section class="layout">
+        <div>
+          <div class="card chart-wrap">
+            <canvas id="chart" width="1400" height="560"></canvas>
+            <div class="meta" id="selectedStockMeta">Select a stock from the side list.</div>
 
-      <section id="page-markets" class="page active">
+            <div class="stats">
+              <div class="stat"><div class="label">GLOBAL100</div><div class="value" id="indexValue">--</div></div>
+              <div class="stat"><div class="label">GDP</div><div class="value" id="gdp">--</div></div>
+              <div class="stat"><div class="label">Inflation</div><div class="value" id="inflation">--</div></div>
+              <div class="stat"><div class="label">Unemployment</div><div class="value" id="unemployment">--</div></div>
+              <div class="stat"><div class="label">Geo Tension</div><div class="value" id="tension">--</div></div>
+              <div class="stat"><div class="label">Sentiment</div><div class="value" id="sentiment">--</div></div>
+            </div>
+
+            <div class="trade-grid">
+              <select id="tradeCompany"></select>
+              <select id="tradeSide"><option value="buy">Buy</option><option value="sell">Sell</option></select>
+              <select id="tradeType"><option value="limit">Limit</option><option value="market">Market</option></select>
+              <input id="tradeQty" type="number" min="1" value="100" />
+              <input id="tradePrice" type="number" step="0.0001" placeholder="Limit price" />
+              <button id="tradeBtn">Submit</button>
+            </div>
+            <div class="status" id="tradeStatus"></div>
+          </div>
+        </div>
+
         <div class="card">
-          <h3>Global Stock Market</h3>
-          <div class="market-layout">
-            <div>
-              <canvas id="chart" width="1200" height="420"></canvas>
-              <div class="muted" id="selectedStockMeta">Select a stock from the table to inspect candlesticks.</div>
-            </div>
-            <div>
-              <h3>Place Order</h3>
-              <div class="form-group"><label>Company</label><select id="tradeCompany"></select></div>
-              <div class="split">
-                <div class="form-group"><label>Side</label><select id="tradeSide"><option value="buy">Buy</option><option value="sell">Sell</option></select></div>
-                <div class="form-group"><label>Type</label><select id="tradeType"><option value="limit">Limit</option><option value="market">Market</option></select></div>
-              </div>
-              <div class="form-group"><label>Quantity</label><input id="tradeQty" type="number" value="100" min="1" /></div>
-              <div class="form-group" id="priceGroup"><label>Limit Price</label><input id="tradePrice" type="number" step="0.0001" /></div>
-              <button id="tradeBtn">Submit Order</button>
-              <div class="status" id="tradeStatus"></div>
-            </div>
+          <div class="side-header">
+            <h3 style="margin:0">Stocks</h3>
+            <span class="tiny">Each item includes mini chart</span>
           </div>
-          <table>
-            <thead>
-              <tr><th>Ticker</th><th>Company</th><th>Price</th><th>Market Cap</th><th>P/E</th><th>Volume</th><th>Depth</th><th>Status</th></tr>
-            </thead>
-            <tbody id="stocks"></tbody>
-          </table>
+          <div class="stock-list" id="stockList"></div>
         </div>
       </section>
 
-      <section id="page-companies" class="page">
-        <div class="split">
-          <div class="stack">
-            <div class="card">
-              <h3>Create Company</h3>
-              <div class="form-group"><label>Company Name</label><input id="name" value="Aether Dynamics" /></div>
-              <div class="split">
-                <div class="form-group"><label>Country</label><input id="country" value="USA" /></div>
-                <div class="form-group"><label>Sector</label><input id="sector" value="AI" /></div>
-              </div>
-              <div class="split">
-                <div class="form-group"><label>Business Model</label><input id="model" value="SaaS" /></div>
-                <div class="form-group"><label>Initial Valuation</label><input id="valuation" type="number" value="800000000" /></div>
-              </div>
-              <button id="createBtn">Create Company</button>
-              <div class="status" id="createStatus"></div>
-            </div>
-            <div class="card">
-              <h3>Leaderboards</h3>
-              <div class="muted">Top Companies</div>
-              <ol class="list" id="topCompanies"></ol>
-              <div class="muted">Richest Agents</div>
-              <ol class="list" id="richest"></ol>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Strategic Action Console</h3>
-            <div class="form-group">
-              <label>Action</label>
-              <select id="actionType">
-                <option value="LAUNCH_PRODUCT">Launch products</option>
-                <option value="MANIPULATE_MARKET">Manipulate markets</option>
-                <option value="ACQUIRE_COMPETITOR">Acquire competitors</option>
-                <option value="RAISE_VENTURE_CAPITAL">Raise venture capital</option>
-                <option value="BUILD_FACTORY">Build factories</option>
-                <option value="MANAGE_LOGISTICS">Manage logistics</option>
-                <option value="INFLUENCE_GOVERNMENT">Influence governments</option>
-                <option value="CREATE_MONOPOLY">Create monopolies</option>
-                <option value="TRIGGER_ECONOMIC_WAR">Trigger economic wars</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Company</label><select id="actionCompany"></select></div>
-            <div class="split">
-              <div class="form-group"><label>Buyer (M&A)</label><select id="buyerCompany"></select></div>
-              <div class="form-group"><label>Target (M&A)</label><select id="targetCompany"></select></div>
-              <div class="form-group"><label>Country</label><input id="actionCountry" placeholder="USA / China / ..." /></div>
-              <div class="form-group"><label>Region</label><input id="actionRegion" placeholder="Middle East / Pacific / ..." /></div>
-              <div class="form-group"><label>Intensity</label><input id="actionIntensity" type="number" step="0.1" value="1" /></div>
-              <div class="form-group"><label>Direction (market)</label><select id="actionDirection"><option value="pump">Pump</option><option value="dump">Dump</option></select></div>
-            </div>
-            <button id="actionBtn">Execute Strategic Action</button>
-            <div class="status" id="actionStatus"></div>
-          </div>
+      <section class="bottom">
+        <div class="card">
+          <h3 style="margin-top:0">World Systems</h3>
+          <div class="muted" id="systems">Loading...</div>
         </div>
-      </section>
-
-      <section id="page-world" class="page">
-        <div class="systems-grid">
-          <div class="card">
-            <h3>News & Media Stream</h3>
-            <ul class="list" id="headlines"></ul>
-          </div>
-          <div class="stack">
-            <div class="card">
-              <h3>World Systems</h3>
-              <div id="systems" class="muted">Loading...</div>
-            </div>
-            <div class="card">
-              <h3>Global Trade Visualization</h3>
-              <div id="tradeRoutes" class="muted">Loading routes...</div>
-            </div>
-          </div>
+        <div class="card">
+          <h3 style="margin-top:0">Top Companies</h3>
+          <ol class="small-list" id="topCompanies"></ol>
+          <h3>Conflict / Treaty Headlines</h3>
+          <div id="headlineChips"></div>
         </div>
       </section>
     </div>
@@ -256,7 +225,7 @@
 
       function setStatus(el, message, error = false) {
         el.textContent = message;
-        el.style.color = error ? "#ff8fa9" : "#8ec9ff";
+        el.style.color = error ? "#ff92aa" : "#8dc7ff";
       }
 
       async function post(url, payload) {
@@ -270,37 +239,27 @@
         return data;
       }
 
-      function populateCompanySelects(companies, keepId) {
-        const selects = [$("tradeCompany"), $("actionCompany"), $("buyerCompany"), $("targetCompany")];
-        const options = companies.map((c) => `<option value="${c.id}">${c.name} (${c.country} · ${c.sector})</option>`).join("");
-        for (const select of selects) {
-          const prev = select.value || keepId;
-          select.innerHTML = options;
-          if (companies.some((c) => c.id === prev)) select.value = prev;
-        }
-      }
-
-      function drawCandles(stock) {
+      function drawMainCandles(stock) {
         const canvas = $("chart");
         const ctx = canvas.getContext("2d");
         const w = canvas.width;
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = "rgba(5,10,20,0.92)";
+        ctx.fillStyle = "rgba(4,9,18,0.95)";
         ctx.fillRect(0, 0, w, h);
         if (!stock?.candles?.length) return;
 
-        const candles = stock.candles.slice(-80);
+        const candles = stock.candles.slice(-120);
         const prices = candles.flatMap((c) => [c.low, c.high]);
         const min = Math.min(...prices);
         const max = Math.max(...prices);
         const range = Math.max(0.0001, max - min);
-        const candleW = Math.max(5, (w - 70) / candles.length - 2);
-        const toY = (price) => 24 + ((max - price) / range) * (h - 48);
+        const toY = (price) => 22 + ((max - price) / range) * (h - 45);
+        const candleW = Math.max(3, (w - 70) / candles.length - 2);
 
-        ctx.strokeStyle = "rgba(95,130,190,0.35)";
-        for (let i = 0; i < 6; i += 1) {
-          const y = 24 + (h - 48) * (i / 5);
+        ctx.strokeStyle = "rgba(120,150,210,0.25)";
+        for (let i = 0; i <= 6; i += 1) {
+          const y = 20 + ((h - 40) * i) / 6;
           ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(w, y);
@@ -314,42 +273,121 @@
           const highY = toY(candle.high);
           const lowY = toY(candle.low);
           const up = candle.close >= candle.open;
-
-          ctx.strokeStyle = up ? "#45f6b0" : "#ff7f9c";
-          ctx.lineWidth = 1.4;
+          ctx.strokeStyle = up ? "#39e0a2" : "#ff7e98";
           ctx.beginPath();
           ctx.moveTo(x + candleW / 2, highY);
           ctx.lineTo(x + candleW / 2, lowY);
           ctx.stroke();
-
-          ctx.fillStyle = up ? "#45f6b0" : "#ff7f9c";
-          const bodyY = Math.min(openY, closeY);
-          const bodyH = Math.max(3, Math.abs(closeY - openY));
-          ctx.fillRect(x, bodyY, candleW, bodyH);
+          ctx.fillStyle = up ? "#39e0a2" : "#ff7e98";
+          ctx.fillRect(x, Math.min(openY, closeY), candleW, Math.max(2, Math.abs(closeY - openY)));
         });
       }
 
-      function switchPage(page) {
-        document.querySelectorAll(".page").forEach((el) => el.classList.remove("active"));
-        document.querySelectorAll(".nav button").forEach((el) => el.classList.remove("active"));
-        const pageEl = document.getElementById(`page-${page}`);
-        if (pageEl) pageEl.classList.add("active");
-        const navBtn = document.querySelector(`.nav button[data-page=\"${page}\"]`);
-        if (navBtn) navBtn.classList.add("active");
+      function drawSparkline(canvas, candles) {
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(4,9,18,0.95)";
+        ctx.fillRect(0, 0, w, h);
+        if (!candles?.length) return;
+
+        const line = candles.slice(-40).map((c) => c.close);
+        const min = Math.min(...line);
+        const max = Math.max(...line);
+        const range = Math.max(0.0001, max - min);
+
+        ctx.beginPath();
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = line.at(-1) >= line[0] ? "#39e0a2" : "#ff7e98";
+        line.forEach((value, i) => {
+          const x = (i / Math.max(1, line.length - 1)) * w;
+          const y = h - ((value - min) / range) * (h - 6) - 3;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      function updateCompanySelect(stocks) {
+        const options = stocks.map((s) => `<option value="${s.companyId}">${s.companyName} (${s.ticker})</option>`).join("");
+        const prev = $("tradeCompany").value || selectedCompanyId;
+        $("tradeCompany").innerHTML = options;
+        if (stocks.some((s) => s.companyId === prev)) $("tradeCompany").value = prev;
+      }
+
+      function renderStockList(stocks) {
+        const list = $("stockList");
+        list.innerHTML = stocks
+          .map((s, i) => `
+            <div class="stock-row ${s.companyId === selectedCompanyId || (!selectedCompanyId && i === 0) ? "active" : ""}" data-company="${s.companyId}">
+              <div class="stock-top">
+                <div>
+                  <div class="ticker">${s.ticker}</div>
+                  <div class="tiny">${s.companyName}</div>
+                </div>
+                <div class="tiny">$${n(s.lastPrice, 4)}</div>
+              </div>
+              <canvas class="spark" id="spark-${s.companyId}" width="330" height="60"></canvas>
+              <div class="stock-bottom">
+                <span>Vol ${n(s.volume, 0)}</span>
+                <span>Stability ${n((s.stability ?? 0) * 100)}%</span>
+                <span>B/S ${(s.buyPressure ?? 0.5).toFixed(2)}/${(s.sellPressure ?? 0.5).toFixed(2)}</span>
+              </div>
+            </div>
+          `)
+          .join("");
+
+        stocks.forEach((s) => {
+          const canvas = document.getElementById(`spark-${s.companyId}`);
+          if (canvas) drawSparkline(canvas, s.candles);
+        });
+
+        document.querySelectorAll(".stock-row").forEach((row) => {
+          row.addEventListener("click", () => {
+            selectedCompanyId = row.dataset.company;
+            if (latestState) render(latestState);
+          });
+        });
+      }
+
+      function renderNewsTicker(headlines) {
+        const text = headlines.length
+          ? headlines.map((h) => `<span class="news-item">📰 ${h.headline}</span>`).join("")
+          : '<span class="news-item">No breaking news.</span>';
+        $("newsTicker").innerHTML = `${text}${text}`;
       }
 
       function render(state) {
         latestState = state;
+        const session = state.marketSession ?? { phase: "day", dayNumber: 1 };
+        document.body.dataset.phase = session.phase;
         $("clock").textContent = `Tick ${state.tick} · ${new Date(state.time).toLocaleString()}`;
-        $("indexValue").innerHTML = `${n(state.indexes.GLOBAL100.value)} <span class="${state.indexes.GLOBAL100.changePct >= 0 ? "up" : "down"}">${n(state.indexes.GLOBAL100.changePct)}%</span>`;
-        $("playerCapital").textContent = `$${n(state.player.cash ?? state.player.netWorth)}`;
+        $("session").textContent = `${session.phase.toUpperCase()} · Day ${session.dayNumber}`;
+        $("participants").textContent = `${n(state.population.count, 0)} participants`;
+
+        $("indexValue").innerHTML = `${n(state.indexes.GLOBAL100.value)} <span style="color:${state.indexes.GLOBAL100.changePct >= 0 ? "#39e0a2" : "#ff7e98"}">${n(state.indexes.GLOBAL100.changePct)}%</span>`;
         $("gdp").textContent = `${n(state.macro.gdpGrowth * 100)}%`;
         $("inflation").textContent = `${n(state.macro.inflation * 100)}%`;
         $("unemployment").textContent = `${n(state.macro.unemployment * 100)}%`;
         $("tension").textContent = `${n(state.geopolitics.tension * 100)}%`;
+        $("sentiment").textContent = `${n(state.sentiment * 100)}%`;
+
+        const stocks = state.stocks.slice().sort((a, b) => b.marketCap - a.marketCap);
+        if (!selectedCompanyId || !stocks.some((s) => s.companyId === selectedCompanyId)) selectedCompanyId = stocks[0]?.companyId ?? null;
+        updateCompanySelect(stocks);
+        renderStockList(stocks);
+
+        const selected = stocks.find((s) => s.companyId === selectedCompanyId) ?? stocks[0];
+        if (selected) {
+          if (!$("tradePrice").value || Number($("tradePrice").value) <= 0) $("tradePrice").value = selected.lastPrice;
+          drawMainCandles(selected);
+          $("selectedStockMeta").textContent = `${selected.companyName} (${selected.ticker}) · Price ${n(selected.lastPrice, 4)} · Market Cap ${n(selected.marketCap)} · P/E ${n(selected.peRatio)} · Volume ${n(selected.volume, 0)} · Stability ${n((selected.stability ?? 0) * 100)}%`;
+        }
+
+        renderNewsTicker(state.headlines.slice(0, 12));
 
         $("systems").innerHTML = `
-          Sentiment: ${n(state.sentiment * 100)}%<br>
           Policy pressure: ${n(state.policyPressure * 100)}%<br>
           Consumer confidence: ${n(state.population.consumerConfidence * 100)}%<br>
           Supply pressure: ${n(state.supplyChains.pressure * 100)}%<br>
@@ -359,73 +397,18 @@
           Active conflicts: ${(state.geopolitics.activeConflicts || []).join(", ") || "None"}
         `;
 
-        $("tradeRoutes").innerHTML = Object.entries(state.supplyChains.regions || {}).map(([key, region]) => `
-          <div class="mini-box"><strong>${key}</strong><br>Resource: ${region.resource} · Sensitivity: ${n(region.sensitivity * 100)}% · Disruption: ${n((region.disruption || 0) * 100)}%</div>
-        `).join("");
-
-        const stocks = state.stocks.slice().sort((a, b) => b.marketCap - a.marketCap);
-        $("stocks").innerHTML = stocks.map((s) => `
-          <tr data-company="${s.companyId}">
-            <td class="ticker">${s.ticker}${s.listed ? "" : " (DL)"}</td>
-            <td>${s.companyName}</td>
-            <td>${n(s.lastPrice, 4)}</td>
-            <td>${n(s.marketCap)}</td>
-            <td>${n(s.peRatio)}</td>
-            <td>${n(s.volume, 0)}</td>
-            <td>${s.buyDepth}/${s.sellDepth}</td>
-            <td>${s.halted ? "Halted" : "Open"}</td>
-          </tr>
-        `).join("");
-
-        const companies = state.companies.slice().sort((a, b) => b.valuation - a.valuation);
-        if (!selectedCompanyId || !companies.some((c) => c.id === selectedCompanyId)) selectedCompanyId = companies[0]?.id ?? null;
-        populateCompanySelects(companies, selectedCompanyId);
-
-        const stock = stocks.find((s) => s.companyId === selectedCompanyId) ?? stocks[0];
-        if (stock) {
-          selectedCompanyId = stock.companyId;
-          $("tradeCompany").value = stock.companyId;
-          $("actionCompany").value = stock.companyId;
-          $("selectedStockMeta").textContent = `${stock.companyName} (${stock.ticker}) · Price ${n(stock.lastPrice, 4)} · Market cap ${n(stock.marketCap)} · P/E ${n(stock.peRatio)} · Volume ${n(stock.volume, 0)}`;
-          if (!$("tradePrice").value || Number($("tradePrice").value) <= 0) $("tradePrice").value = stock.lastPrice;
-          drawCandles(stock);
-        }
-
-        $("headlines").innerHTML = state.headlines.map((h) => `<li>${h.headline}</li>`).join("");
         $("topCompanies").innerHTML = state.leaderboards.companies.map((c) => `<li>${c.name} — ${n(c.valuation)}</li>`).join("");
-        $("richest").innerHTML = state.population.topRichest.map((a) => `<li>${a.type} (${a.id}) — ${n(a.wealth)}</li>`).join("");
-
-        document.querySelectorAll("#stocks tr").forEach((row) => {
-          row.addEventListener("click", () => {
-            selectedCompanyId = row.dataset.company;
-            render(latestState);
-          });
-        });
+        $("headlineChips").innerHTML = state.headlines.slice(0, 10).map((h) => `<span class="chip">${h.headline}</span>`).join("");
       }
 
-      document.querySelectorAll(".nav button").forEach((button) => {
-        button.addEventListener("click", () => switchPage(button.dataset.page));
-      });
-
       $("tradeType").addEventListener("change", () => {
-        const market = $("tradeType").value === "market";
-        $("priceGroup").style.display = market ? "none" : "block";
+        const isMarket = $("tradeType").value === "market";
+        $("tradePrice").disabled = isMarket;
       });
 
-      $("createBtn").addEventListener("click", async () => {
-        try {
-          const company = await post("/api/company", {
-            name: $("name").value,
-            country: $("country").value,
-            sector: $("sector").value,
-            businessModel: $("model").value,
-            initialValuation: Number($("valuation").value || 800000000)
-          });
-          selectedCompanyId = company.id;
-          setStatus($("createStatus"), `Created ${company.name} (${company.country} · ${company.sector})`);
-        } catch (error) {
-          setStatus($("createStatus"), error.message, true);
-        }
+      $("tradeCompany").addEventListener("change", () => {
+        selectedCompanyId = $("tradeCompany").value;
+        if (latestState) render(latestState);
       });
 
       $("tradeBtn").addEventListener("click", async () => {
@@ -439,40 +422,15 @@
             price: orderType === "market" ? undefined : Number($("tradePrice").value || 0),
             traderId: "player"
           });
-          setStatus($("tradeStatus"), `${orderType === "market" ? "Market" : "Limit"} order accepted.`);
+          setStatus($("tradeStatus"), `${orderType === "market" ? "Market" : "Limit"} order submitted.`);
         } catch (error) {
           setStatus($("tradeStatus"), error.message, true);
         }
       });
 
-      $("actionBtn").addEventListener("click", async () => {
-        try {
-          const actionType = $("actionType").value;
-          const payload = {
-            actionType,
-            companyId: $("actionCompany").value,
-            buyerId: $("buyerCompany").value,
-            targetId: $("targetCompany").value,
-            country: $("actionCountry").value || undefined,
-            region: $("actionRegion").value || undefined,
-            intensity: Number($("actionIntensity").value || 1),
-            direction: $("actionDirection").value
-          };
-          const result = await post("/api/action", payload);
-          setStatus($("actionStatus"), `${actionType} executed: ${JSON.stringify(result)}`);
-        } catch (error) {
-          setStatus($("actionStatus"), error.message, true);
-        }
-      });
-
-      $("tradeCompany").addEventListener("change", () => {
-        selectedCompanyId = $("tradeCompany").value;
-        if (latestState) render(latestState);
-      });
-
       const stream = new EventSource("/api/stream");
-      stream.onmessage = (evt) => render(JSON.parse(evt.data));
-      stream.onerror = () => setStatus($("actionStatus"), "Realtime stream disconnected. Reconnecting...");
+      stream.onmessage = (event) => render(JSON.parse(event.data));
+      stream.onerror = () => setStatus($("tradeStatus"), "Realtime stream disconnected. Reconnecting...");
     </script>
   </body>
 </html>

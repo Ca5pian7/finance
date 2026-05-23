@@ -75,7 +75,7 @@ test("geopolitical and supply events affect system pressures", () => {
   assert.ok(state.headlines.some((h) => /Conflict escalation|sanctions/i.test(h.headline)));
 });
 
-test("merger delists target and boosts buyer valuation", () => {
+test("merger keeps target listed and boosts buyer valuation", () => {
   const state = createInitialState({ seed: 21 });
   upsertCompany(state, createCompany({ id: "buyer", name: "Omni Core", country: "USA", sector: "AI", businessModel: "SaaS", initialValuation: 2_000_000_000 }));
   upsertCompany(state, createCompany({ id: "target", name: "Nano Grid", country: "Japan", sector: "Semiconductor", businessModel: "Hardware", initialValuation: 900_000_000 }));
@@ -83,8 +83,8 @@ test("merger delists target and boosts buyer valuation", () => {
   const before = state.companies.buyer.valuation;
   const result = executeMerger(state, { buyerId: "buyer", targetId: "target" });
 
-  assert.equal(result.targetDelisted, true);
-  assert.equal(state.stocks.target.listed, false);
+  assert.equal(result.targetDelisted, false);
+  assert.equal(state.stocks.target.listed, true);
   assert.ok(state.companies.buyer.valuation > before);
 });
 
@@ -120,4 +120,22 @@ test("strategic action can trigger economic war conditions", () => {
   assert.ok(state.geopolitics.tension > beforeTension);
   assert.ok(state.geopolitics.activeConflicts.includes("Pacific Corridor"));
   assert.ok(state.headlines.some((h) => /Economic war escalates|Conflict escalation/i.test(h.headline)));
+});
+
+test("market session advances with day/night cycle and 10M participant population", () => {
+  const state = createInitialState({ seed: 9 });
+  upsertCompany(state, createCompany({ id: "m1", name: "Session Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  assert.equal(state.population.participantCount, 10_000_000);
+  runTick(state);
+  assert.equal(state.marketSession.phase, "day");
+  assert.equal(state.marketSession.dayNumber, 1);
+
+  for (let i = 0; i < 150; i += 1) runTick(state);
+  assert.equal(state.marketSession.phase, "night");
+
+  for (let i = 0; i < 150; i += 1) runTick(state);
+  assert.equal(state.marketSession.dayNumber, 2);
+  assert.ok(state.stocks.m1.stability >= 0.1 && state.stocks.m1.stability <= 0.98);
+  assert.ok(state.stocks.m1.buyPressure >= 0.05 && state.stocks.m1.buyPressure <= 0.95);
 });

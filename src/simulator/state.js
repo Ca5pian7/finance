@@ -20,6 +20,11 @@ export function createInitialState({ seed = 42 } = {}) {
     seed,
     tick: 0,
     time: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+    marketSession: {
+      ticksPerDay: 300,
+      phase: "day",
+      dayNumber: 1
+    },
     macro: { ...DEFAULT_MACRO },
     sentiment: 0,
     policyPressure: 0,
@@ -135,6 +140,9 @@ export function createCompany({
       delistedTick: null,
       volume: 0,
       halted: false,
+      stability: 0.7,
+      buyPressure: 0.5,
+      sellPressure: 0.5,
       candles: []
     }
   };
@@ -177,6 +185,7 @@ function createPopulation(seed) {
   }
 
   return {
+    participantCount: 10_000_000,
     agents,
     unemploymentStress: 0.05,
     consumerConfidence: 0.62,

@@ -28,6 +28,7 @@ function getSnapshot() {
   return {
     tick: state.tick,
     time: state.time,
+    marketSession: state.marketSession,
     macro: state.macro,
     sentiment: state.sentiment,
     policyPressure: state.policyPressure,
@@ -47,9 +48,10 @@ function getSnapshot() {
       peRatio: stock.peRatio,
       shortInterest: stock.shortInterest,
       dividendYield: stock.dividendYield,
-      listed: stock.listed,
       volume: stock.volume,
-      halted: stock.halted,
+      stability: stock.stability,
+      buyPressure: stock.buyPressure,
+      sellPressure: stock.sellPressure,
       candles: stock.candles.slice(-80),
       buyDepth: state.orderBooks[companyId]?.buy?.length ?? 0,
       sellDepth: state.orderBooks[companyId]?.sell?.length ?? 0
@@ -66,7 +68,7 @@ function getSnapshot() {
       profitMargin: c.kpis.profitMargin
     })),
     population: {
-      count: state.population.agents.length,
+      count: state.population.participantCount ?? state.population.agents.length,
       consumerConfidence: state.population.consumerConfidence,
       unemploymentStress: state.population.unemploymentStress,
       inequalityIndex: state.population.inequalityIndex,

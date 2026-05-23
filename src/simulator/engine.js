@@ -1,5 +1,8 @@
 import { createRng } from "./random.js";
 
+const STOCK_DAY_TICKS = 300;
+const SIM_MS_PER_TICK = Math.round((24 * 60 * 60 * 1000) / STOCK_DAY_TICKS);
+
 function bounded(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -28,8 +31,6 @@ export function placeOrder(state, order) {
   if (!book) throw new Error("Unknown company");
   if (!["buy", "sell"].includes(order.side)) throw new Error("Invalid side");
   if (order.quantity <= 0) throw new Error("Invalid order quantity");
-  if (!state.stocks[order.companyId].listed) throw new Error("Security delisted");
-  if (state.stocks[order.companyId].halted) throw new Error("Trading halted");
   const stock = state.stocks[order.companyId];
   const orderType = order.orderType === "market" ? "market" : "limit";
   let price = Number(order.price);
@@ -58,7 +59,7 @@ export function matchOrderBook(state, companyId) {
   book.buy.sort((a, b) => b.price - a.price || a.timestamp - b.timestamp);
   book.sell.sort((a, b) => a.price - b.price || a.timestamp - b.timestamp);
 
-  while (stock.listed && book.buy.length && book.sell.length && book.buy[0].price >= book.sell[0].price) {
+  while (book.buy.length && book.sell.length && book.buy[0].price >= book.sell[0].price) {
     const bid = book.buy[0];
     const ask = book.sell[0];
     const quantity = Math.min(bid.quantity, ask.quantity);
@@ -195,7 +196,7 @@ function applyEvent(state, event) {
 function updateCompany(state, companyId, rng) {
   const company = state.companies[companyId];
   const stock = state.stocks[companyId];
-  if (!stock.listed) return;
+  const crowd = simulateCrowdFlow(state, company, stock, rng);
 
   const inflationDrag = state.macro.inflation * 0.35;
   const demand = bounded(0.03 + state.sentiment * 0.4 - state.macro.unemployment * 0.2 + (rng() - 0.5) * 0.05, -0.2, 0.25);
@@ -225,24 +226,65 @@ function updateCompany(state, companyId, rng) {
     state.geopolitics.tension * 0.015 -
     state.supplyChains.pressure * 0.012;
   const meanReversion = valuationGap * 0.08;
+  const crowdReturn = crowd.pressureGap * 0.035;
   const random = (rng() - 0.5) * 0.008;
-  const baseReturn = fundamentalReturn + macroReturn + meanReversion + random;
-  const maxMove = bounded(0.015 + state.geopolitics.tension * 0.015 + state.supplyChains.pressure * 0.01, 0.015, 0.05);
+  const baseReturn = fundamentalReturn + macroReturn + meanReversion + crowdReturn + random;
+  const maxMove = bounded(
+    0.01 +
+      (1 - stock.stability) * 0.03 +
+      Math.abs(crowd.pressureGap) * 0.01 +
+      state.geopolitics.tension * 0.01 +
+      state.supplyChains.pressure * 0.008,
+    0.008,
+    0.05
+  );
   const nextPrice = Math.max(0.1, stock.lastPrice * (1 + bounded(baseReturn, -maxMove * 1.5, maxMove * 1.5)));
   const clamped = bounded(nextPrice, stock.lastPrice * (1 - maxMove), stock.lastPrice * (1 + maxMove));
-  stock.halted = Math.abs((clamped - stock.lastPrice) / stock.lastPrice) >= 0.045;
+  stock.halted = false;
   stock.lastPrice = Number(clamped.toFixed(4));
   stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
   stock.peRatio = Number((Math.max(1, stock.marketCap / Math.max(1, company.kpis.revenue * company.kpis.profitMargin))).toFixed(2));
   stock.shortInterest = bounded(stock.shortInterest + (rng() - 0.5) * 0.01 + (state.sentiment < 0 ? 0.003 : -0.002), 0, 0.5);
   stock.dividendYield = bounded(0.005 + company.kpis.profitMargin * 0.06 - company.kpis.growth * 0.02, 0, 0.09);
+  stock.listed = true;
+  stock.delistedTick = null;
+}
 
-  if (company.valuation < 300_000_000 || company.kpis.profitMargin < -0.15) {
-    stock.listed = false;
-    stock.halted = true;
-    stock.delistedTick = state.tick;
-    pushHeadline(state, `${company.name} was delisted after severe financial deterioration`, -0.04);
-  }
+function simulateCrowdFlow(state, company, stock, rng) {
+  const participants = state.population.participantCount ?? 10_000_000;
+  const companyCount = Math.max(1, Object.keys(state.companies).length);
+  const sentimentBias = bounded(
+    0.5 + state.sentiment * 0.18 + (company.reputation - 0.5) * 0.1 - state.geopolitics.tension * 0.06,
+    0.2,
+    0.8
+  );
+  const buyPressure = bounded(sentimentBias + (rng() - 0.5) * 0.1, 0.05, 0.95);
+  const sellPressure = bounded(1 - buyPressure + (rng() - 0.5) * 0.08, 0.05, 0.95);
+  const pressureGap = buyPressure - sellPressure;
+  const activeRatio = bounded(
+    0.006 + state.funds.aiBotAggression * 0.002 + Math.abs(state.sentiment) * 0.002 + rng() * 0.0015,
+    0.001,
+    0.02
+  );
+  const activeParticipants = Math.round(participants * activeRatio);
+  const flowVolume = Math.max(100, Math.round((activeParticipants / companyCount) * (0.6 + rng() * 0.8)));
+
+  stock.volume = Math.max(0, Math.round(stock.volume * 0.92 + flowVolume));
+  stock.buyPressure = Number(buyPressure.toFixed(3));
+  stock.sellPressure = Number(sellPressure.toFixed(3));
+  stock.stability = Number(
+    bounded(
+      0.35 +
+        company.reputation * 0.25 +
+        (1 - Math.abs(pressureGap)) * 0.3 +
+        (1 - state.geopolitics.tension) * 0.1 -
+        state.supplyChains.pressure * 0.1,
+      0.1,
+      0.98
+    ).toFixed(3)
+  );
+
+  return { pressureGap };
 }
 
 function updatePopulation(state, rng) {
@@ -324,21 +366,21 @@ export function executeMerger(state, { buyerId, targetId }) {
   const buyer = state.companies[buyerId];
   const target = state.companies[targetId];
   if (!buyer || !target || buyerId === targetId) throw new Error("Invalid merger participants");
-  const targetStock = state.stocks[targetId];
-  if (!targetStock?.listed) throw new Error("Target is not listed");
 
   buyer.valuation = Number((buyer.valuation + target.valuation * 0.9).toFixed(2));
   buyer.employees += Math.round(target.employees * 0.75);
   buyer.marketDominance = bounded(buyer.marketDominance + 0.08, 0, 1);
   buyer.politicalInfluence = bounded(buyer.politicalInfluence + 0.05, 0, 1);
   buyer.kpis.revenue = Number((buyer.kpis.revenue + target.kpis.revenue * 0.85).toFixed(2));
-  targetStock.listed = false;
-  targetStock.halted = true;
-  targetStock.delistedTick = state.tick;
-  delete state.orderBooks[targetId];
+  const targetStock = state.stocks[targetId];
+  if (targetStock) {
+    targetStock.listed = true;
+    targetStock.halted = false;
+    targetStock.delistedTick = null;
+  }
   state.geopolitics.tension = bounded(state.geopolitics.tension + 0.01, 0, 1);
   applyEvent(state, { type: "MERGER", buyerName: buyer.name, targetName: target.name });
-  return { buyerId, targetId, buyerValuation: buyer.valuation, targetDelisted: true };
+  return { buyerId, targetId, buyerValuation: buyer.valuation, targetDelisted: false };
 }
 
 export function executeStrategicAction(state, payload = {}) {
@@ -355,7 +397,6 @@ export function executeStrategicAction(state, payload = {}) {
     case "MANIPULATE_MARKET": {
       const company = requireCompany(state, payload.companyId);
       const stock = state.stocks[company.id];
-      if (!stock?.listed) throw new Error("Security not listed");
       const direction = payload.direction === "dump" ? "dump" : "pump";
       const move = direction === "pump" ? 0.02 * intensity : -0.025 * intensity;
       stock.lastPrice = Number(Math.max(0.1, stock.lastPrice * (1 + move)).toFixed(4));
@@ -450,7 +491,14 @@ function snapshotCandle(state, companyId, open, rng) {
 
 export function runTick(state, { events = [] } = {}) {
   state.tick += 1;
-  state.time = new Date(new Date(state.time).getTime() + 60_000).toISOString();
+  const ticksPerDay = state.marketSession?.ticksPerDay ?? STOCK_DAY_TICKS;
+  state.time = new Date(new Date(state.time).getTime() + SIM_MS_PER_TICK).toISOString();
+  const dayProgress = ((state.tick - 1) % ticksPerDay) / ticksPerDay;
+  state.marketSession = {
+    ticksPerDay,
+    phase: dayProgress < 0.5 ? "day" : "night",
+    dayNumber: Math.floor((state.tick - 1) / ticksPerDay) + 1
+  };
   const rng = createRng(state.seed + state.tick);
 
   for (const event of events) applyEvent(state, event);
@@ -489,6 +537,9 @@ export function runTick(state, { events = [] } = {}) {
       )}% | Geopolitical tension ${asPct(state.geopolitics.tension)}%`,
       0
     );
+  }
+  if (state.tick % ticksPerDay === 0) {
+    pushHeadline(state, `Market day ${state.marketSession.dayNumber} closed. Next session opens with updated global sentiment.`, 0);
   }
 
   return state;
