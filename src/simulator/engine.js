@@ -4,6 +4,8 @@ const STOCK_DAY_TICKS = 300;
 const SIM_MS_PER_TICK = Math.round((24 * 60 * 60 * 1000) / STOCK_DAY_TICKS);
 const TARGET_INFLATION = 0.025;
 const NEUTRAL_RATE = 0.03;
+const MARKET_MAKER_BUY_ID = "market-maker-buy";
+const MARKET_MAKER_SELL_ID = "market-maker-sell";
 
 function bounded(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -35,6 +37,49 @@ function getPlayerHoldingShares(state, companyId) {
 function getStakePctForShares(stock, shares) {
   const outstanding = Math.max(1, Number(stock?.sharesOutstanding ?? 0));
   return bounded((Number(shares) / outstanding) * 100, 0, 100);
+}
+
+function getPublicFloatShares(stock) {
+  const configuredFloat = Number(stock?.publicFloatShares ?? 0);
+  if (Number.isFinite(configuredFloat) && configuredFloat > 0) return configuredFloat;
+  return Math.max(1, Number(stock?.sharesOutstanding ?? 0));
+}
+
+function seedMarketLiquidity(state, companyId) {
+  const book = state.orderBooks[companyId];
+  const stock = state.stocks[companyId];
+  if (!book || !stock) return;
+
+  book.buy = book.buy.filter((order) => order.traderId !== MARKET_MAKER_BUY_ID);
+  book.sell = book.sell.filter((order) => order.traderId !== MARKET_MAKER_SELL_ID);
+
+  const publicFloatShares = getPublicFloatShares(stock);
+  const totalLiquidity = Math.max(2_000, Math.round(publicFloatShares * 0.015));
+  const perLevel = Math.max(500, Math.round(totalLiquidity / 3));
+  const basePrice = Math.max(0.1, Number(stock.lastPrice ?? 0.1));
+  const spreads = [0.004, 0.009, 0.016];
+
+  spreads.forEach((spread, index) => {
+    const levelQty = Math.max(100, Math.round(perLevel * (1 - index * 0.18)));
+    book.buy.push({
+      id: `${state.tick}-mm-buy-${index + 1}-${companyId}`,
+      traderId: MARKET_MAKER_BUY_ID,
+      side: "buy",
+      price: Number((basePrice * (1 - spread)).toFixed(4)),
+      orderType: "limit",
+      quantity: levelQty,
+      timestamp: Date.now() + index
+    });
+    book.sell.push({
+      id: `${state.tick}-mm-sell-${index + 1}-${companyId}`,
+      traderId: MARKET_MAKER_SELL_ID,
+      side: "sell",
+      price: Number((basePrice * (1 + spread)).toFixed(4)),
+      orderType: "limit",
+      quantity: levelQty,
+      timestamp: Date.now() + index
+    });
+  });
 }
 
 function settlePlayerTrade(state, companyId, side, quantity, price) {
@@ -75,12 +120,14 @@ export function placeOrder(state, order) {
     if (order.side === "buy" && estimatedNotional > (state.player?.cash ?? 0)) {
       throw new Error("Insufficient cash balance");
     }
-    if (order.side === "buy" && getPlayerHoldingShares(state, order.companyId) + quantity > stock.sharesOutstanding) {
-      throw new Error("Insufficient company shares available");
+    if (order.side === "buy" && getPlayerHoldingShares(state, order.companyId) + quantity > getPublicFloatShares(stock)) {
+      throw new Error("Insufficient public float available");
     }
     if (order.side === "sell" && quantity > getPlayerHoldingShares(state, order.companyId)) {
       throw new Error("Insufficient shares to sell");
     }
+    const oppositeSide = order.side === "buy" ? "sell" : "buy";
+    if (!book[oppositeSide].length) seedMarketLiquidity(state, order.companyId);
   }
   book[order.side].push({
     id: `${state.tick}-${book[order.side].length + 1}-${order.side}`,
@@ -445,9 +492,7 @@ function updateLeaderboards(state) {
   const billionaireFloor = 1_000_000_000;
   const founderEntries = Object.values(state.companies).map((company) => {
     const stock = state.stocks[company.id];
-    const playerShares = getPlayerHoldingShares(state, company.id);
-    const playerStakePct = getStakePctForShares(stock, playerShares);
-    const founderStakePct = Number((100 - playerStakePct).toFixed(4));
+    const founderStakePct = Number(company.ownership?.principalStakePct ?? 0);
     const founderNetWorth = Number((company.valuation * (founderStakePct / 100)).toFixed(2));
     return {
       id: `founder-${company.id}`,
@@ -658,6 +703,7 @@ export function runTick(state, { events = [] } = {}) {
     if (!state.orderBooks[companyId]) state.orderBooks[companyId] = { buy: [], sell: [] };
     const open = state.stocks[companyId].lastPrice;
     updateCompany(state, companyId, rng);
+    seedMarketLiquidity(state, companyId);
     matchOrderBook(state, companyId);
     snapshotCandle(state, companyId, open, rng);
   }

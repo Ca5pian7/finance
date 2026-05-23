@@ -1108,7 +1108,7 @@
                 <span style="color:var(--up)">${fmtBig(row.value)}</span>
               </div>
               <div class="tiny" style="margin:-3px 0 6px 0;color:var(--muted)">
-                ${row.companyName} · Stake ${n(row.stakePct, 4)}% · Market Stake ${n(100 - row.stakePct, 4)}%
+                ${row.companyName} · Your Stake ${n(row.stakePct, 4)}%
               </div>
             `).join("")
           : "<div class='tiny'>Buy stock to see your portfolio positions here.</div>";
@@ -1276,10 +1276,14 @@
             <div><span class="tiny">Sector</span><br><b>${co?.sector ?? "--"}</b></div>
             <div><span class="tiny">Employees</span><br><b>${n(co?.employees ?? 0, 0)}</b></div>
             <div><span class="tiny">Carbon Emissions</span><br><b>${n(co?.carbonEmissions ?? 0, 0)} t</b></div>
+            <div><span class="tiny">Founder Stake</span><br><b>${n(co?.principalStakePct ?? 0, 2)}%</b></div>
+            <div><span class="tiny">Public Float</span><br><b>${n(co?.publicFloatPct ?? 0, 2)}%</b></div>
             <div><span class="tiny">Short Interest</span><br><b>${pct(sel.shortInterest ?? 0)}</b></div>
             <div><span class="tiny">Political Influence</span><br><b>${pct(co?.politicalInfluence ?? 0)}</b></div>
             <div><span class="tiny">Support</span><br><b>$${n(sel.support ?? 0, 4)}</b></div>
             <div><span class="tiny">Resistance</span><br><b>$${n(sel.resistance ?? 0, 4)}</b></div>
+            <div><span class="tiny">Float Shares</span><br><b>${n(co?.publicFloatShares ?? sel.publicFloatShares ?? 0, 0)}</b></div>
+            <div><span class="tiny">Founder</span><br><b>${co?.principalHolder ?? "--"}</b></div>
           </div>`;
 
         // mini chart
@@ -1418,7 +1422,7 @@
           $("indexPill").className = `pill ${idx.changePct >= 0 ? "up" : "down"}`;
         }
         $("participantPill").textContent = `${n(state.population?.count ?? 0, 0)} participants`;
-        $("balancePill").textContent = `Balance ${fmtBig(state.player?.cash ?? 0)}`;
+        $("balancePill").textContent = `Wallet ${fmtBig(state.player?.cash ?? 0)}`;
         $("rankPill").textContent = `Rank #${n(state.player?.rank ?? 0, 0)} · Net ${fmtBig(state.player?.netWorth ?? 0)}`;
 
         // news
@@ -1460,7 +1464,7 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error ?? "Request failed");
           status.style.color = "#8dc7ff";
-          status.textContent = `${side === "buy" ? "▲ Buy" : "▼ Sell"} order placed · ${data.trades?.length ?? 0} fill(s)`;
+          status.textContent = `${side === "buy" ? "▲ Buy" : "▼ Sell"} order placed · ${data.trades?.length ?? 0} fill(s) · Wallet ${fmtBig(data.player?.cash ?? 0)}`;
         } catch (err) {
           status.style.color = "#ff92aa";
           status.textContent = err.message;
