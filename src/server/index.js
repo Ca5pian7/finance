@@ -52,6 +52,9 @@ function getSnapshot() {
       stability: stock.stability,
       buyPressure: stock.buyPressure,
       sellPressure: stock.sellPressure,
+      support: stock.support,
+      resistance: stock.resistance,
+      sharesOutstanding: stock.sharesOutstanding,
       candles: stock.candles.slice(-240),
       buyDepth: state.orderBooks[companyId]?.buy?.length ?? 0,
       sellDepth: state.orderBooks[companyId]?.sell?.length ?? 0
@@ -71,6 +74,7 @@ function getSnapshot() {
       reputation: c.reputation,
       aiCapability: c.aiCapability,
       marketDominance: c.marketDominance,
+      politicalInfluence: c.politicalInfluence,
       supplyRisk: c.supplyRisk,
       rdBudget: c.rdBudget,
       carbonEmissions: c.carbonEmissions,
@@ -90,7 +94,7 @@ function getSnapshot() {
       consumerConfidence: state.population.consumerConfidence,
       unemploymentStress: state.population.unemploymentStress,
       inequalityIndex: state.population.inequalityIndex,
-      topRichest: state.leaderboards.richest.slice(0, 5)
+      topRichest: state.leaderboards.richest.slice(0, 25)
     }
   };
 }

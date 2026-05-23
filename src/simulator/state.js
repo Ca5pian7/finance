@@ -66,7 +66,8 @@ export function createInitialState({ seed = 42 } = {}) {
       cash: 50_000_000_000,
       netWorth: 50_000_000_000,
       influence: 0.1,
-      rank: 0
+      rank: 0,
+      holdings: {}
     },
     companies: {},
     stocks: {},
@@ -143,6 +144,8 @@ export function createCompany({
       stability: 0.7,
       buyPressure: 0.5,
       sellPressure: 0.5,
+      support: initialPrice * 0.96,
+      resistance: initialPrice * 1.04,
       candles: []
     }
   };
