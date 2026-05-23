@@ -7,6 +7,7 @@ const TARGET_INFLATION = 0.025;
 const NEUTRAL_RATE = 0.03;
 const MARKET_MAKER_BUY_ID = "market-maker-buy";
 const MARKET_MAKER_SELL_ID = "market-maker-sell";
+const STOCK_DAY_INTERVAL_MINUTES = 1440;
 
 function bounded(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -29,6 +30,99 @@ function pushHeadline(state, headline, impact = 0) {
 
 function asPct(value) {
   return Number((value * 100).toFixed(2));
+}
+
+function touchDayRange(stock, price) {
+  const p = Number(price ?? stock.lastPrice ?? 0);
+  if (!Number.isFinite(stock.dayOpenPrice) || stock.dayOpenPrice <= 0) stock.dayOpenPrice = Math.max(0.1, Number(stock.lastPrice ?? 0.1));
+  if (!Number.isFinite(stock.dayHigh) || stock.dayHigh <= 0) stock.dayHigh = stock.dayOpenPrice;
+  if (!Number.isFinite(stock.dayLow) || stock.dayLow <= 0) stock.dayLow = stock.dayOpenPrice;
+  stock.dayHigh = Number(Math.max(stock.dayHigh, p).toFixed(4));
+  stock.dayLow = Number(Math.max(0.1, Math.min(stock.dayLow, p)).toFixed(4));
+}
+
+function resetStockDayRange(stock) {
+  const anchor = Math.max(0.1, Number(stock.lastPrice ?? stock.dayOpenPrice ?? 0.1));
+  stock.dayOpenPrice = Number(anchor.toFixed(4));
+  stock.dayHigh = Number(anchor.toFixed(4));
+  stock.dayLow = Number(anchor.toFixed(4));
+}
+
+function applyStockNewsMomentum(state, event, momentumDelta) {
+  const byId = event.companyId && state.stocks[event.companyId] ? [event.companyId] : [];
+  const byName = event.companyName
+    ? Object.entries(state.companies)
+        .filter(([, company]) => company.name === event.companyName)
+        .map(([companyId]) => companyId)
+    : [];
+  const companyIds = [...new Set([...byId, ...byName])];
+  for (const companyId of companyIds) {
+    const stock = state.stocks[companyId];
+    if (!stock) continue;
+    stock.newsMomentum = bounded((stock.newsMomentum ?? 0) + momentumDelta, -1, 1);
+  }
+}
+
+function applyBarrierClamp(stock, candidatePrice, directionBias = 0) {
+  const basePrice = Math.max(0.1, Number(stock.lastPrice ?? 0.1));
+  const support = Math.max(0.1, Number(stock.support ?? basePrice * 0.96));
+  const resistance = Math.max(support + 0.0001, Number(stock.resistance ?? basePrice * 1.04));
+  const supportStrength = bounded(Number(stock.supportStrength ?? 0.72), 0.2, 0.98);
+  const resistanceStrength = bounded(Number(stock.resistanceStrength ?? 0.72), 0.2, 0.98);
+  const candidate = Math.max(0.1, Number(candidatePrice ?? basePrice));
+  const movingDown = candidate < basePrice;
+  const movingUp = candidate > basePrice;
+
+  if (movingDown) {
+    const pressureGain = Math.max(0, -directionBias) * 2.2 + Math.max(0, (support - candidate) / Math.max(0.0001, support)) * 8;
+    const decay = 0.55 + supportStrength * 0.2;
+    stock.supportBreakPressure = bounded((stock.supportBreakPressure ?? 0) * 0.92 + pressureGain, 0, 16);
+    const breakNeed = 3.8 + supportStrength * 6.5;
+    if (candidate < support && stock.supportBreakPressure < breakNeed) {
+      const damping = bounded(0.68 + supportStrength * 0.26, 0.7, 0.94);
+      const held = support - (support - candidate) * (1 - damping);
+      stock.supportStrength = bounded(supportStrength + 0.02, 0.2, 0.98);
+      return Number(Math.max(0.1, held).toFixed(4));
+    }
+    if (candidate < support && stock.supportBreakPressure >= breakNeed) {
+      stock.supportStrength = bounded(supportStrength - 0.05, 0.2, 0.98);
+      stock.supportBreakPressure = Math.max(0, stock.supportBreakPressure - decay);
+    } else {
+      stock.supportBreakPressure = Math.max(0, stock.supportBreakPressure - decay);
+      stock.supportStrength = bounded(supportStrength + 0.002, 0.2, 0.98);
+    }
+  }
+
+  if (movingUp) {
+    const pressureGain = Math.max(0, directionBias) * 2.2 + Math.max(0, (candidate - resistance) / Math.max(0.0001, resistance)) * 8;
+    const decay = 0.55 + resistanceStrength * 0.2;
+    stock.resistanceBreakPressure = bounded((stock.resistanceBreakPressure ?? 0) * 0.92 + pressureGain, 0, 16);
+    const breakNeed = 3.8 + resistanceStrength * 6.5;
+    if (candidate > resistance && stock.resistanceBreakPressure < breakNeed) {
+      const damping = bounded(0.68 + resistanceStrength * 0.26, 0.7, 0.94);
+      const held = resistance + (candidate - resistance) * (1 - damping);
+      stock.resistanceStrength = bounded(resistanceStrength + 0.02, 0.2, 0.98);
+      return Number(Math.max(0.1, held).toFixed(4));
+    }
+    if (candidate > resistance && stock.resistanceBreakPressure >= breakNeed) {
+      stock.resistanceStrength = bounded(resistanceStrength - 0.05, 0.2, 0.98);
+      stock.resistanceBreakPressure = Math.max(0, stock.resistanceBreakPressure - decay);
+    } else {
+      stock.resistanceBreakPressure = Math.max(0, stock.resistanceBreakPressure - decay);
+      stock.resistanceStrength = bounded(resistanceStrength + 0.002, 0.2, 0.98);
+    }
+  }
+
+  if (!movingDown) {
+    stock.supportBreakPressure = Math.max(0, (stock.supportBreakPressure ?? 0) - 0.35);
+    stock.supportStrength = bounded((stock.supportStrength ?? supportStrength) + 0.002, 0.2, 0.98);
+  }
+  if (!movingUp) {
+    stock.resistanceBreakPressure = Math.max(0, (stock.resistanceBreakPressure ?? 0) - 0.35);
+    stock.resistanceStrength = bounded((stock.resistanceStrength ?? resistanceStrength) + 0.002, 0.2, 0.98);
+  }
+
+  return Number(Math.max(0.1, candidate).toFixed(4));
 }
 
 function getPlayerHoldingShares(state, companyId) {
@@ -127,14 +221,23 @@ export function placeOrder(state, order) {
   if (order.traderId === "player") {
     const estimatedNotional = quantity * price;
     const currentShares = getPlayerHoldingShares(state, order.companyId);
+    const publicFloatShares = getPublicFloatShares(stock);
     if (order.side === "buy" && estimatedNotional > (state.player?.cash ?? 0)) {
       throw new Error("Insufficient cash balance");
     }
-    if (order.side === "buy" && currentShares + quantity > getPublicFloatShares(stock)) {
+    if (order.side === "buy" && currentShares + quantity > publicFloatShares) {
       throw new Error("Insufficient public float available");
     }
-    if (order.side === "sell" && currentShares - quantity < -getPublicFloatShares(stock)) {
-      throw new Error("Insufficient borrow availability to short");
+    if (order.side === "sell") {
+      const nextShares = currentShares - quantity;
+      const existingShortShares = Math.max(0, -currentShares);
+      const nextShortShares = Math.max(0, -nextShares);
+      const additionalShortShares = Math.max(0, nextShortShares - existingShortShares);
+      const borrowedByMarket = Math.max(0, Math.round((stock.shortInterest ?? 0) * (stock.sharesOutstanding ?? 0)));
+      const availableBorrow = Math.max(0, publicFloatShares - borrowedByMarket - existingShortShares);
+      if (additionalShortShares > availableBorrow) {
+        throw new Error("Insufficient borrow availability to short");
+      }
     }
     const oppositeSide = order.side === "buy" ? "sell" : "buy";
     if (!book[oppositeSide].length) seedMarketLiquidity(state, order.companyId);
@@ -166,14 +269,17 @@ export function matchOrderBook(state, companyId) {
     const quantity = Math.min(bid.quantity, ask.quantity);
     const rawPrice = (bid.price + ask.price) / 2;
     const participation = bounded(quantity / Math.max(1, stock.sharesOutstanding), 0, 1);
-    const impactPct = Math.min(0.08, Math.sqrt(participation) * 0.25);
+    const impactPct = Math.min(0.045, Math.sqrt(participation) * 0.16);
     const buyInitiated = bid.timestamp >= ask.timestamp;
     const impactedPrice = rawPrice * (1 + (buyInitiated ? impactPct : -impactPct));
 
-    const breakerLimit = 0.1;
+    const newsMagnitude = Math.abs(stock.newsMomentum ?? 0);
+    const breakerLimit = bounded(0.05 + newsMagnitude * 0.1, 0.05, 0.16);
     const maxUp = stock.lastPrice * (1 + breakerLimit);
     const maxDown = stock.lastPrice * (1 - breakerLimit);
-    const tradePrice = bounded(impactedPrice, maxDown, maxUp);
+    const directionBias = buyInitiated ? 1 : -1;
+    const barrierAdjusted = applyBarrierClamp(stock, impactedPrice, directionBias);
+    const tradePrice = bounded(barrierAdjusted, maxDown, maxUp);
 
     bid.quantity -= quantity;
     ask.quantity -= quantity;
@@ -182,6 +288,7 @@ export function matchOrderBook(state, companyId) {
     if (ask.quantity <= 0) book.sell.shift();
 
     stock.lastPrice = Number(tradePrice.toFixed(4));
+    touchDayRange(stock, stock.lastPrice);
     stock.volume += quantity;
     syncStockDerivedMetrics(stock, company);
     if (company) {
@@ -261,6 +368,7 @@ function applyEvent(state, event) {
       break;
     case "AI_BREAKTHROUGH":
       state.sentiment += 0.04;
+      applyStockNewsMomentum(state, event, 0.75);
       pushHeadline(state, `${event.companyName} announces major AI breakthrough`, 0.04);
       break;
     case "RATE_HIKE":
@@ -295,6 +403,7 @@ function applyEvent(state, event) {
       if (event.companyId && state.companies[event.companyId]) {
         state.companies[event.companyId].reputation = bounded(state.companies[event.companyId].reputation - 0.12, 0, 1);
       }
+      applyStockNewsMomentum(state, event, -0.55);
       pushHeadline(state, `${event.companyName ?? "A major company"} faces scandal allegations`, -0.03);
       break;
     case "PRODUCT_LAUNCH":
@@ -302,11 +411,13 @@ function applyEvent(state, event) {
       if (event.companyId && state.companies[event.companyId]) {
         state.companies[event.companyId].innovation = bounded(state.companies[event.companyId].innovation + 0.08, 0, 1);
       }
+      applyStockNewsMomentum(state, event, 0.6);
       pushHeadline(state, `${event.companyName ?? "A market leader"} launches a breakthrough product`, 0.03);
       break;
     case "LAYOFFS":
       state.sentiment -= 0.025;
       state.macro.unemployment = bounded(state.macro.unemployment + 0.003, 0.02, 0.25);
+      applyStockNewsMomentum(state, event, -0.35);
       pushHeadline(state, `${event.companyName ?? "A major employer"} announces layoffs`, -0.025);
       break;
     case "CYBER_ATTACK":
@@ -348,51 +459,66 @@ function updateCompany(state, companyId, rng) {
   const recentCandles = stock.candles.slice(-40);
   const rangeHigh = recentCandles.length ? Math.max(...recentCandles.map((c) => c.high)) : stock.lastPrice;
   const rangeLow = recentCandles.length ? Math.min(...recentCandles.map((c) => c.low)) : stock.lastPrice;
-  const support = bounded(rangeLow * 0.995, 0.1, rangeHigh);
-  const resistance = Math.max(support + 0.0001, rangeHigh * 1.005);
+  const previousSupport = Number(stock.support ?? stock.lastPrice * 0.96);
+  const previousResistance = Number(stock.resistance ?? stock.lastPrice * 1.04);
+  const support = bounded(previousSupport * 0.84 + rangeLow * 0.16, 0.1, rangeHigh);
+  const resistance = Math.max(support + 0.0001, previousResistance * 0.84 + rangeHigh * 0.16);
   stock.support = Number(support.toFixed(4));
   stock.resistance = Number(resistance.toFixed(4));
+  stock.newsMomentum = Number((stock.newsMomentum ?? 0).toFixed(4));
   const fundamentalReturn =
-    company.kpis.growth * 0.05 +
-    company.kpis.profitMargin * 0.02 +
-    (company.innovation - 0.5) * 0.025 +
-    (company.reputation - 0.5) * 0.015;
+    company.kpis.growth * 0.042 +
+    company.kpis.profitMargin * 0.018 +
+    (company.innovation - 0.5) * 0.02 +
+    (company.reputation - 0.5) * 0.012;
   const macroReturn =
-    state.sentiment * 0.03 -
-    state.macro.rate * 0.06 -
-    state.macro.inflation * 0.05 -
-    state.geopolitics.tension * 0.015 -
-    state.supplyChains.pressure * 0.012;
-  const meanReversion = valuationGap * 0.08;
-  const crowdReturn = crowd.pressureGap * 0.035;
+    state.sentiment * 0.028 -
+    state.macro.rate * 0.05 -
+    state.macro.inflation * 0.045 -
+    state.geopolitics.tension * 0.013 -
+    state.supplyChains.pressure * 0.01;
+  const meanReversion = valuationGap * 0.07;
+  const crowdReturn = crowd.pressureGap * 0.028;
   const supportDistance = (stock.lastPrice - support) / Math.max(0.0001, stock.lastPrice);
   const resistanceDistance = (resistance - stock.lastPrice) / Math.max(0.0001, stock.lastPrice);
-  const supportBounce = supportDistance < 0.02 ? (0.02 - supportDistance) * 0.32 : 0;
-  const resistanceDrag = resistanceDistance < 0.02 ? (0.02 - resistanceDistance) * 0.24 : 0;
+  const supportBounce = supportDistance < 0.02 ? (0.02 - supportDistance) * 0.28 : 0;
+  const resistanceDrag = resistanceDistance < 0.02 ? (0.02 - resistanceDistance) * 0.22 : 0;
   const downsidePressure =
     Math.max(0, state.macro.inflation - TARGET_INFLATION) * 0.35 +
     state.supplyChains.pressure * 0.08 +
     state.geopolitics.tension * 0.06 +
     Math.max(0, -company.kpis.growth) * 0.18;
-  const random = (rng() - 0.5) * 0.012;
-  const baseReturn = fundamentalReturn + macroReturn + meanReversion + crowdReturn + supportBounce - resistanceDrag - downsidePressure * 0.02 + random;
+  const newsReturn = (stock.newsMomentum ?? 0) * 0.03;
+  const random = (rng() - 0.5) * 0.007;
+  const baseReturn = fundamentalReturn + macroReturn + meanReversion + crowdReturn + supportBounce - resistanceDrag - downsidePressure * 0.018 + newsReturn + random;
+  const newsMagnitude = Math.abs(stock.newsMomentum ?? 0);
   const maxMove = bounded(
-    0.01 +
-      (1 - stock.stability) * 0.03 +
-      Math.abs(crowd.pressureGap) * 0.01 +
-      state.geopolitics.tension * 0.01 +
-      state.supplyChains.pressure * 0.008,
-    0.008,
-    0.05
+    0.006 +
+      (1 - stock.stability) * 0.017 +
+      Math.abs(crowd.pressureGap) * 0.007 +
+      state.geopolitics.tension * 0.006 +
+      state.supplyChains.pressure * 0.004 +
+      newsMagnitude * 0.015,
+    0.004,
+    0.04
   );
   const nextPrice = Math.max(0.1, stock.lastPrice * (1 + bounded(baseReturn, -maxMove * 1.5, maxMove * 1.5)));
-  const clamped = bounded(nextPrice, stock.lastPrice * (1 - maxMove), stock.lastPrice * (1 + maxMove));
+  let clamped = bounded(nextPrice, stock.lastPrice * (1 - maxMove), stock.lastPrice * (1 + maxMove));
+  clamped = applyBarrierClamp(stock, clamped, crowd.pressureGap + (stock.newsMomentum ?? 0));
+  const dayAnchor = Math.max(0.1, Number(stock.dayOpenPrice ?? stock.lastPrice ?? 0.1));
+  const upCap = bounded(0.1 + Math.max(0, stock.newsMomentum ?? 0) * 0.24, 0.1, 0.36);
+  const downCap = bounded(0.1 + Math.max(0, -(stock.newsMomentum ?? 0)) * 0.2, 0.1, 0.3);
+  const dayUpper = dayAnchor * (1 + upCap);
+  const dayLower = dayAnchor * (1 - downCap);
+  clamped = bounded(clamped, dayLower, dayUpper);
   stock.halted = false;
   stock.lastPrice = Number(clamped.toFixed(4));
+  touchDayRange(stock, stock.lastPrice);
   syncStockDerivedMetrics(stock, company);
   company.valuation = Number((company.valuation * 0.6 + stock.marketCap * 0.4).toFixed(2));
-  stock.shortInterest = bounded(stock.shortInterest + (rng() - 0.5) * 0.01 + (state.sentiment < 0 ? 0.003 : -0.002), 0, 0.5);
+  stock.shortInterest = bounded(stock.shortInterest + (rng() - 0.5) * 0.006 + (state.sentiment < 0 ? 0.0025 : -0.0018), 0, 0.5);
   stock.dividendYield = bounded(0.005 + company.kpis.profitMargin * 0.06 - company.kpis.growth * 0.02, 0, 0.09);
+  stock.newsMomentum = Number((stock.newsMomentum * 0.92).toFixed(4));
   stock.listed = true;
   stock.delistedTick = null;
 }
@@ -421,12 +547,12 @@ function simulateCrowdFlow(state, company, stock, rng) {
   stock.sellPressure = Number(sellPressure.toFixed(3));
   stock.stability = Number(
     bounded(
-      0.35 +
-        company.reputation * 0.25 +
-        (1 - Math.abs(pressureGap)) * 0.3 +
-        (1 - state.geopolitics.tension) * 0.1 -
-        state.supplyChains.pressure * 0.1,
-      0.1,
+      0.42 +
+        company.reputation * 0.22 +
+        (1 - Math.abs(pressureGap)) * 0.26 +
+        (1 - state.geopolitics.tension) * 0.09 -
+        state.supplyChains.pressure * 0.08,
+      0.2,
       0.98
     ).toFixed(3)
   );
@@ -457,16 +583,29 @@ function updateFundsAndIndexes(state, rng) {
   const stocks = Object.values(state.stocks).filter((s) => s.listed);
   if (!stocks.length) return;
 
-  const avgMove = stocks.reduce((sum, s) => sum + (s.candles.at(-1)?.close ?? s.lastPrice), 0) / stocks.length;
-  const prevValue = state.indexes.GLOBAL100.value;
-  const target = bounded(avgMove * 90, 650, 3600);
-  state.indexes.GLOBAL100.value = Number((prevValue + (target - prevValue) * 0.08).toFixed(2));
-  state.indexes.GLOBAL100.changePct = Number((((state.indexes.GLOBAL100.value - prevValue) / Math.max(1, prevValue)) * 100).toFixed(2));
-  state.indexes.GLOBAL100.members = stocks
-    .slice()
-    .sort((a, b) => b.marketCap - a.marketCap)
-    .slice(0, 10)
-    .map((s) => s.ticker);
+  const sortedByCap = stocks.slice().sort((a, b) => b.marketCap - a.marketCap);
+  const top100 = sortedByCap.slice(0, 100);
+  const allMarketCapNow = stocks.reduce((sum, s) => sum + Math.max(1, Number(s.marketCap ?? 0)), 0);
+  const topMarketCapNow = top100.reduce((sum, s) => sum + Math.max(1, Number(s.marketCap ?? 0)), 0);
+
+  if (!Number.isFinite(state.indexes.GLOBAL_ALL?.baseMarketCap) || state.indexes.GLOBAL_ALL.baseMarketCap <= 0) {
+    state.indexes.GLOBAL_ALL.baseMarketCap = allMarketCapNow;
+  }
+  if (!Number.isFinite(state.indexes.GLOBAL100?.baseMarketCap) || state.indexes.GLOBAL100.baseMarketCap <= 0) {
+    state.indexes.GLOBAL100.baseMarketCap = topMarketCapNow;
+  }
+
+  const allPrev = Number(state.indexes.GLOBAL_ALL?.value ?? 1000);
+  const allTarget = 1000 * (allMarketCapNow / Math.max(1, state.indexes.GLOBAL_ALL.baseMarketCap));
+  state.indexes.GLOBAL_ALL.value = Number((allPrev + (allTarget - allPrev) * 0.12).toFixed(2));
+  state.indexes.GLOBAL_ALL.changePct = Number((((state.indexes.GLOBAL_ALL.value - allPrev) / Math.max(1, allPrev)) * 100).toFixed(2));
+  state.indexes.GLOBAL_ALL.members = sortedByCap.map((s) => s.ticker);
+
+  const topPrev = Number(state.indexes.GLOBAL100?.value ?? 1000);
+  const topTarget = 1000 * (topMarketCapNow / Math.max(1, state.indexes.GLOBAL100.baseMarketCap));
+  state.indexes.GLOBAL100.value = Number((topPrev + (topTarget - topPrev) * 0.12).toFixed(2));
+  state.indexes.GLOBAL100.changePct = Number((((state.indexes.GLOBAL100.value - topPrev) / Math.max(1, topPrev)) * 100).toFixed(2));
+  state.indexes.GLOBAL100.members = top100.map((s) => s.ticker);
 
   const macroSignal = state.sentiment - state.macro.inflation - state.geopolitics.tension * 0.5;
   state.funds.institutionalAUM = Math.max(50_000_000_000, Math.round(state.funds.institutionalAUM * (1 + macroSignal * 0.003 + (rng() - 0.5) * 0.002)));
@@ -594,7 +733,10 @@ export function executeStrategicAction(state, payload = {}) {
       const stock = state.stocks[company.id];
       const direction = payload.direction === "dump" ? "dump" : "pump";
       const move = direction === "pump" ? 0.02 * intensity : -0.025 * intensity;
-      stock.lastPrice = Number(Math.max(0.1, stock.lastPrice * (1 + move)).toFixed(4));
+      stock.newsMomentum = bounded((stock.newsMomentum ?? 0) + (direction === "pump" ? 0.35 : -0.4), -1, 1);
+      const manipulated = Math.max(0.1, stock.lastPrice * (1 + move));
+      stock.lastPrice = Number(applyBarrierClamp(stock, manipulated, direction === "pump" ? 1 : -1).toFixed(4));
+      touchDayRange(stock, stock.lastPrice);
       syncStockDerivedMetrics(stock, company);
       company.valuation = Number((company.valuation * 0.75 + stock.marketCap * 0.25).toFixed(2));
       stock.shortInterest = bounded(stock.shortInterest + (direction === "pump" ? -0.015 : 0.03), 0, 0.5);
@@ -692,10 +834,19 @@ export function runTick(state, { events = [] } = {}) {
   if (!Number.isFinite(state.player?.cash)) state.player.cash = 50_000_000_000;
   if (!Number.isFinite(state.player?.netWorth)) state.player.netWorth = state.player.cash;
   if (!state.player?.holdings) state.player.holdings = {};
+  if (!state.indexes?.GLOBAL100) {
+    state.indexes = state.indexes ?? {};
+    state.indexes.GLOBAL100 = { value: 1000, changePct: 0, members: [] };
+  }
+  if (!state.indexes?.GLOBAL_ALL) {
+    state.indexes = state.indexes ?? {};
+    state.indexes.GLOBAL_ALL = { value: 1000, changePct: 0, members: [] };
+  }
   state.tick += 1;
   const ticksPerDay = state.marketSession?.ticksPerDay ?? STOCK_DAY_TICKS;
   state.time = new Date(new Date(state.time).getTime() + SIM_MS_PER_TICK).toISOString();
   const dayProgress = ((state.tick - 1) % ticksPerDay) / ticksPerDay;
+  const isNewDayTick = (state.tick - 1) % ticksPerDay === 0;
   state.marketSession = {
     ticksPerDay,
     phase: dayProgress < 0.5 ? "day" : "night",
@@ -713,6 +864,15 @@ export function runTick(state, { events = [] } = {}) {
 
   for (const companyId of Object.keys(state.companies)) {
     if (!state.orderBooks[companyId]) state.orderBooks[companyId] = { buy: [], sell: [] };
+    if (!state.stocks[companyId]) continue;
+    const stock = state.stocks[companyId];
+    if (!Number.isFinite(stock.supportStrength)) stock.supportStrength = 0.72;
+    if (!Number.isFinite(stock.resistanceStrength)) stock.resistanceStrength = 0.72;
+    if (!Number.isFinite(stock.supportBreakPressure)) stock.supportBreakPressure = 0;
+    if (!Number.isFinite(stock.resistanceBreakPressure)) stock.resistanceBreakPressure = 0;
+    if (!Number.isFinite(stock.newsMomentum)) stock.newsMomentum = 0;
+    if (!Number.isFinite(stock.dayOpenPrice) || stock.dayOpenPrice <= 0) resetStockDayRange(stock);
+    if (isNewDayTick) resetStockDayRange(stock);
     const open = state.stocks[companyId].lastPrice;
     updateCompany(state, companyId, rng);
     seedMarketLiquidity(state, companyId);
@@ -735,14 +895,20 @@ export function runTick(state, { events = [] } = {}) {
   if (state.tick % 45 === 0) {
     pushHeadline(
       state,
-      `Index ${state.indexes.GLOBAL100.value.toFixed(2)} (${state.indexes.GLOBAL100.changePct.toFixed(2)}%) | Supply pressure ${asPct(
+      `Index ${state.indexes.GLOBAL100.value.toFixed(2)} (${state.indexes.GLOBAL100.changePct.toFixed(2)}%) | Global-All ${
+        state.indexes.GLOBAL_ALL.value.toFixed(2)
+      } (${state.indexes.GLOBAL_ALL.changePct.toFixed(2)}%) | Supply pressure ${asPct(
         state.supplyChains.pressure
       )}% | Geopolitical tension ${asPct(state.geopolitics.tension)}%`,
       0
     );
   }
   if (state.tick % ticksPerDay === 0) {
-    pushHeadline(state, `Market day ${state.marketSession.dayNumber} closed. Next session opens with updated global sentiment.`, 0);
+    pushHeadline(
+      state,
+      `Market day ${state.marketSession.dayNumber} (${STOCK_DAY_INTERVAL_MINUTES} simulated minutes) closed. Next session opens with updated global sentiment.`,
+      0
+    );
   }
 
   return state;

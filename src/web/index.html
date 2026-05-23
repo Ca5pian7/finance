@@ -332,7 +332,7 @@
 
       .markets-top {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         gap: 10px;
         margin-bottom: 14px;
       }
@@ -528,6 +528,7 @@
             <button class="ibtn active" data-interval="5">5M</button>
             <button class="ibtn" data-interval="15">15M</button>
             <button class="ibtn" data-interval="60">1H</button>
+            <button class="ibtn" data-interval="1440">1D</button>
           </div>
         </div>
 
@@ -609,6 +610,11 @@
           <div class="card-title">GLOBAL100</div>
           <div class="index-val" id="mGlobal100">--</div>
           <div class="tiny" id="mGlobal100Chg" style="margin-top:4px">--</div>
+        </div>
+        <div class="index-card">
+          <div class="card-title">GLOBAL ALL</div>
+          <div class="index-val" id="mGlobalAll">--</div>
+          <div class="tiny" id="mGlobalAllChg" style="margin-top:4px">--</div>
         </div>
         <div class="index-card">
           <div class="card-title">Market Breadth</div>
@@ -802,7 +808,7 @@
       /* ── state ── */
       let latestState = null;
       let selectedCompanyId = null;
-      let currentInterval = 5; // ticks per candle group (5=raw, 15=3x, 60=12x)
+      let currentInterval = 5; // sim-minute interval per group (5m/15m/1h/1d)
 
       /* ── tab navigation ── */
       document.querySelectorAll(".tab").forEach((tab) => {
@@ -849,6 +855,12 @@
       function getGroupSize(intervalMins) {
         // 1 tick ≈ 4.8 sim-minutes
         return Math.max(1, Math.round(intervalMins / 4.8));
+      }
+
+      function intervalLabel(intervalMins) {
+        if (intervalMins >= 1440) return "1D";
+        if (intervalMins >= 60) return `${Math.round(intervalMins / 60)}H`;
+        return `${intervalMins}M`;
       }
 
       /* ── main chart ── */
@@ -944,7 +956,7 @@
         ctx.fillText(`$${lastClose.toFixed(4)}`, w - padR + 2, lineY + 3);
 
         // overlay info
-        $("chartOverlay").textContent = `${stock.ticker}  ·  ${candles.length} bars  ·  ${currentInterval}M interval`;
+        $("chartOverlay").textContent = `${stock.ticker}  ·  ${candles.length} bars  ·  ${intervalLabel(currentInterval)} interval`;
       }
 
       /* ── sparkline ── */
@@ -989,11 +1001,11 @@
         return stocks.find((s) => s.companyId === selectedCompanyId) ?? stocks[0] ?? null;
       }
 
-      function priceChange(candles) {
-        if (!candles?.length) return 0;
-        const last = candles.at(-1)?.close ?? 0;
-        const prev = candles.at(-2)?.close ?? last;
-        return prev ? (last - prev) / prev : 0;
+      function dayPriceChange(stock) {
+        if (!stock) return 0;
+        const last = Number(stock.lastPrice ?? stock.candles?.at(-1)?.close ?? 0);
+        const dayOpen = Number(stock.dayOpenPrice ?? stock.candles?.at(0)?.open ?? last);
+        return dayOpen ? (last - dayOpen) / dayOpen : 0;
       }
 
       /* ── RENDER TRADING PAGE ── */
@@ -1018,17 +1030,24 @@
         }
 
         if (sel) {
-          const chg = priceChange(sel.candles);
+          const chg = dayPriceChange(sel);
           $("chartPrice").textContent = `$${n(sel.lastPrice, 4)}`;
-          $("chartChange").textContent = `${chg >= 0 ? "▲" : "▼"} ${pct(Math.abs(chg))}`;
+          $("chartChange").textContent = `${chg >= 0 ? "▲" : "▼"} ${pct(Math.abs(chg))} today`;
           $("chartChange").className = `price-change ${chg >= 0 ? "up" : "down"}`;
           drawMainChart(sel);
         }
 
         // stat strip
         const idx = state.indexes?.GLOBAL100;
+        const globalAll = state.indexes?.GLOBAL_ALL;
         $("sGlobal").innerHTML = idx
-          ? `${n(idx.value)} <span style="font-size:11px;color:${idx.changePct >= 0 ? "var(--up)" : "var(--down)"}">${idx.changePct >= 0 ? "+" : ""}${idx.changePct}%</span>`
+          ? `${n(idx.value)} <span style="font-size:11px;color:${idx.changePct >= 0 ? "var(--up)" : "var(--down)"}">${idx.changePct >= 0 ? "+" : ""}${idx.changePct}%</span>${
+              globalAll
+                ? `<div style="font-size:10px;color:${globalAll.changePct >= 0 ? "var(--up)" : "var(--down)"}">ALL ${n(globalAll.value)} ${
+                    globalAll.changePct >= 0 ? "+" : ""
+                  }${globalAll.changePct}%</div>`
+                : ""
+            }`
           : "--";
         const gColor = (state.macro?.gdpGrowth ?? 0) >= 0 ? "var(--up)" : "var(--down)";
         $("sGdp").innerHTML = `<span style="color:${gColor}">${pct(state.macro?.gdpGrowth ?? 0)}</span>`;
@@ -1042,7 +1061,7 @@
         const sorted = stocks.slice().sort((a, b) => b.marketCap - a.marketCap);
         $("stockCount").textContent = `${sorted.length} stocks`;
         $("stockList").innerHTML = sorted.map((s) => {
-          const chg = priceChange(s.candles);
+          const chg = dayPriceChange(s);
           const stab = s.stability ?? 0.5;
           const stabPct = Math.round(stab * 100);
           return `
@@ -1084,7 +1103,9 @@
           .map(([companyId, qty]) => {
             const stock = stocks.find((s) => s.companyId === companyId);
             if (!stock || qty === 0) return null;
-            const stakePct = Math.max(0, Math.min(100, (Math.abs(qty) / Math.max(1, stock.sharesOutstanding ?? 1)) * 100));
+            const isShort = qty < 0;
+            const stakeBaseShares = isShort ? Math.max(1, stock.publicFloatShares ?? stock.sharesOutstanding ?? 1) : Math.max(1, stock.sharesOutstanding ?? 1);
+            const stakePct = Math.max(0, Math.min(100, (Math.abs(qty) / stakeBaseShares) * 100));
             const value = qty * stock.lastPrice;
             return {
               companyId,
@@ -1093,7 +1114,7 @@
               qty,
               value,
               stakePct,
-              isShort: qty < 0
+              isShort
             };
           })
           .filter(Boolean)
@@ -1109,7 +1130,7 @@
               <span style="color:${row.value >= 0 ? "var(--up)" : "var(--down)"}">${fmtBig(row.value)}</span>
             </div>
             <div class="tiny" style="margin:-3px 0 6px 0;color:var(--muted)">
-              ${row.companyName} · ${row.isShort ? "Short Exposure" : "Your Stake"} ${n(row.stakePct, 4)}%
+              ${row.companyName} · ${row.isShort ? "Borrowed Short Exposure" : "Your Stake"} ${n(row.stakePct, 4)}%
             </div>
           `).join("")
           : "<div class='tiny'>Trade stock to see your portfolio positions here.</div>";
@@ -1119,6 +1140,7 @@
       function renderMarkets(state) {
         const stocks = state.stocks ?? [];
         const idx = state.indexes?.GLOBAL100;
+        const globalAll = state.indexes?.GLOBAL_ALL;
 
         $("mGlobal100").textContent = idx ? n(idx.value) : "--";
         $("mGlobal100Chg").innerHTML = idx
@@ -1126,8 +1148,14 @@
               ${idx.changePct >= 0 ? "+" : ""}${idx.changePct}% today
             </span>`
           : "--";
+        $("mGlobalAll").textContent = globalAll ? n(globalAll.value) : "--";
+        $("mGlobalAllChg").innerHTML = globalAll
+          ? `<span style="color:${globalAll.changePct >= 0 ? "var(--up)" : "var(--down)"}">
+              ${globalAll.changePct >= 0 ? "+" : ""}${globalAll.changePct}% today
+            </span>`
+          : "--";
 
-        const advancing = stocks.filter((s) => priceChange(s.candles) >= 0).length;
+        const advancing = stocks.filter((s) => dayPriceChange(s) >= 0).length;
         const declining = stocks.length - advancing;
         $("mAdvancing").textContent = advancing;
         $("mDeclining").textContent = declining;
@@ -1145,7 +1173,7 @@
 
         const sorted = (stocks).slice().sort((a, b) => b.marketCap - a.marketCap);
         $("marketsGrid").innerHTML = sorted.map((s) => {
-          const chg = priceChange(s.candles);
+          const chg = dayPriceChange(s);
           const stab = s.stability ?? 0.5;
           const bp = s.buyPressure ?? 0.5;
           const sp = s.sellPressure ?? 0.5;
@@ -1405,7 +1433,9 @@
             <span style="color:${r.id === "player" ? "var(--accent)" : "var(--up)"}">${fmtBig(r.netWorth ?? r.wealth ?? 0)}</span>
           </div>
           <div class="tiny" style="margin:-4px 0 6px 0;color:var(--muted)">
-            ${r.companyName ? `${r.companyName} · Stake ${n(r.stakePct ?? 0, 4)}%` : `Stake ${n(r.stakePct ?? 0, 4)}%`}
+            ${r.companyName
+              ? `${r.companyName} · ${r.type === "founder" ? "Founder Stake" : "Your Stake"} ${n(r.stakePct ?? 0, 4)}%`
+              : `Stake ${n(r.stakePct ?? 0, 4)}%`}
           </div>`).join("") || "<div class='tiny'>No ranking data</div>";
       }
 
