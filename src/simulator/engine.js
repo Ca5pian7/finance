@@ -485,8 +485,8 @@ function snapshotCandle(state, companyId, open, rng) {
   const wick = spread * (0.35 + rng() * 0.65);
   const high = Number((Math.max(open, close) + wick).toFixed(4));
   const low = Number(Math.max(0.0001, Math.min(open, close) - wick).toFixed(4));
-  stock.candles.push({ tick: state.tick, open, high, low, close, volume: stock.volume });
-  stock.candles = stock.candles.slice(-300);
+  stock.candles.push({ tick: state.tick, time: state.time, open, high, low, close, volume: stock.volume });
+  stock.candles = stock.candles.slice(-600);
 }
 
 export function runTick(state, { events = [] } = {}) {
