@@ -2,7 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
 import { createCompany, createInitialState, createSeedCompanies, upsertCompany } from "../simulator/state.js";
-import { placeOrder, runTick } from "../simulator/engine.js";
+import { executeMerger, placeOrder, runTick } from "../simulator/engine.js";
 import { fastForward, loadCheckpoint, saveCheckpoint } from "../simulator/persistence.js";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -30,13 +30,23 @@ function getSnapshot() {
     time: state.time,
     macro: state.macro,
     sentiment: state.sentiment,
+    policyPressure: state.policyPressure,
     headlines: state.headlines.slice(0, 10),
+    geopolitics: state.geopolitics,
+    supplyChains: state.supplyChains,
+    funds: state.funds,
+    indexes: state.indexes,
+    leaderboards: state.leaderboards,
+    player: state.player,
     stocks: Object.entries(state.stocks).map(([companyId, stock]) => ({
       companyId,
       ticker: stock.ticker,
       lastPrice: stock.lastPrice,
       marketCap: stock.marketCap,
       peRatio: stock.peRatio,
+      shortInterest: stock.shortInterest,
+      dividendYield: stock.dividendYield,
+      listed: stock.listed,
       volume: stock.volume,
       halted: stock.halted,
       candles: stock.candles.slice(-50)
@@ -51,7 +61,14 @@ function getSnapshot() {
       revenue: c.kpis.revenue,
       growth: c.kpis.growth,
       profitMargin: c.kpis.profitMargin
-    }))
+    })),
+    population: {
+      count: state.population.agents.length,
+      consumerConfidence: state.population.consumerConfidence,
+      unemploymentStress: state.population.unemploymentStress,
+      inequalityIndex: state.population.inequalityIndex,
+      topRichest: state.leaderboards.richest.slice(0, 5)
+    }
   };
 }
 
@@ -124,6 +141,23 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       runTick(state, { events: body.events ?? [] });
       return sendJson(res, 200, getSnapshot());
+    }
+
+    if (req.url === "/api/event" && req.method === "POST") {
+      const body = await readBody(req);
+      const events = Array.isArray(body.events) ? body.events : body.event ? [body.event] : [];
+      runTick(state, { events });
+      return sendJson(res, 200, getSnapshot());
+    }
+
+    if (req.url === "/api/merge" && req.method === "POST") {
+      const body = await readBody(req);
+      const outcome = executeMerger(state, { buyerId: body.buyerId, targetId: body.targetId });
+      return sendJson(res, 200, outcome);
+    }
+
+    if (req.url === "/api/rankings" && req.method === "GET") {
+      return sendJson(res, 200, state.leaderboards);
     }
 
     if (req.url === "/api/fast-forward" && req.method === "POST") {

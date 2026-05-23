@@ -1,28 +1,35 @@
-# World Finance Simulator (MVP)
+# World Finance Simulator (V10 Foundation)
 
-This repository now contains an executable MVP for a realistic global economy and stock market simulation.
+This repository now contains an executable V10 foundation for a realistic global economy and stock market simulation.
 
 ## Implemented Scope
 
 - Deterministic tick-based simulation loop
 - Company creation system (sector/country/business model + core KPIs)
-- Market microstructure MVP
+- Market microstructure
   - Buy/sell order books
   - Matching engine
-  - Price updates, market cap, volume, PE ratio
-  - Circuit-breaker-style clamping and halt flags
+  - Price updates, market cap, volume, PE ratio, short interest, dividend yield
+  - Circuit-breaker-style clamping, halt flags, listing/delisting lifecycle
 - Macro + supply shock coupling
   - GDP growth, inflation, unemployment, policy rate
   - Commodity prices (oil, silicon, food, copper)
+- Geopolitics + policy simulation
+  - Wars, sanctions, trade agreements, cyber shocks, conflicts/treaties
+  - Government policy pressure and country-level regulatory drift
 - News/sentiment engine (headline generation from events)
+- Supply chain + regional pressure model
+- AI population model (consumers, investors, CEOs, workers, politicians, influencers)
+- Funds/index layer (institutional/hedge/retail liquidity + GLOBAL100 index)
+- Corporate mergers with delisting outcomes and leaderboard progression
 - Persistence + offline progression
   - Checkpoint save/load
   - Fast-forward ticks when needed
 - Realtime dashboard delivery
   - HTTP API
   - SSE stream for live state updates
-  - Minimal dark-themed browser dashboard
-- Automated tests for determinism, matching behavior, and bounded indicators
+  - Dark-themed browser dashboard with macro, systems, index/funds, stocks, and rankings
+- Automated tests for determinism, matching behavior, bounded indicators, event coupling, and mergers
 
 ## Project Structure
 
@@ -98,5 +105,5 @@ Example event payload for `/api/tick`:
 
 ## Notes
 
-This is a foundation release that implements the MVP loop and system coupling.  
-Advanced layers (distributed microservices, Kafka streams, multiplayer shard sync, deep AI populations, derivatives markets, geopolitical diplomacy trees, and extended world systems) are intentionally deferred to future iterations.
+This release upgrades the simulator to a broader V10-style foundation while keeping a single-node deterministic architecture.  
+Advanced layers (distributed services, multiplayer shard sync, full derivatives/options engine, and deep strategy UI workflows) remain future expansions.

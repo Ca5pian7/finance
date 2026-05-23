@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { placeOrder, runTick } from "../src/simulator/engine.js";
+import { executeMerger, placeOrder, runTick } from "../src/simulator/engine.js";
 import { createCompany, createInitialState, upsertCompany } from "../src/simulator/state.js";
 
 test("simulation is deterministic for same seed and event sequence", () => {
@@ -43,4 +43,28 @@ test("prices and macro indicators remain bounded across ticks", () => {
   assert.ok(state.macro.inflation >= 0.005 && state.macro.inflation <= 0.18);
   assert.ok(state.macro.unemployment >= 0.02 && state.macro.unemployment <= 0.25);
   assert.ok(state.macro.rate >= 0 && state.macro.rate <= 0.15);
+});
+
+test("geopolitical and supply events affect system pressures", () => {
+  const state = createInitialState({ seed: 13 });
+  upsertCompany(state, createCompany({ id: "c1", name: "Delta Logistics", country: "USA", sector: "Logistics", businessModel: "B2B" }));
+
+  runTick(state, { events: [{ type: "WAR", region: "Middle East" }, { type: "SANCTION", country: "China" }] });
+
+  assert.ok(state.geopolitics.tension > 0.15);
+  assert.ok(state.supplyChains.pressure > 0.2);
+  assert.ok(state.headlines.some((h) => /Conflict escalation|sanctions/i.test(h.headline)));
+});
+
+test("merger delists target and boosts buyer valuation", () => {
+  const state = createInitialState({ seed: 21 });
+  upsertCompany(state, createCompany({ id: "buyer", name: "Omni Core", country: "USA", sector: "AI", businessModel: "SaaS", initialValuation: 2_000_000_000 }));
+  upsertCompany(state, createCompany({ id: "target", name: "Nano Grid", country: "Japan", sector: "Semiconductor", businessModel: "Hardware", initialValuation: 900_000_000 }));
+
+  const before = state.companies.buyer.valuation;
+  const result = executeMerger(state, { buyerId: "buyer", targetId: "target" });
+
+  assert.equal(result.targetDelisted, true);
+  assert.equal(state.stocks.target.listed, false);
+  assert.ok(state.companies.buyer.valuation > before);
 });
