@@ -284,6 +284,28 @@ test("trade size affects execution impact and company valuation", () => {
   assert.ok(large.companies.imp.valuation - largeBefore > small.companies.imp.valuation - smallBefore);
 });
 
+test("very small orders do not create outsized valuation jumps", () => {
+  const state = createInitialState({ seed: 111 });
+  upsertCompany(
+    state,
+    createCompany({ id: "sml", name: "Small Impact Labs", country: "USA", sector: "AI", businessModel: "SaaS", initialValuation: 3_000_000_000 })
+  );
+  const before = state.companies.sml.valuation;
+  placeOrder(state, { companyId: "sml", side: "sell", orderType: "limit", price: 10, quantity: 100_000, traderId: "maker-sell" });
+  placeOrder(state, { companyId: "sml", side: "buy", orderType: "limit", price: 10.05, quantity: 10, traderId: "player" });
+  const movePct = Math.abs((state.companies.sml.valuation - before) / before);
+  assert.ok(movePct < 0.001);
+});
+
+test("upsert enforces unique company names and tickers", () => {
+  const state = createInitialState({ seed: 112 });
+  upsertCompany(state, createCompany({ id: "u1", name: "Nova Core", country: "USA", sector: "AI", businessModel: "SaaS" }));
+  upsertCompany(state, createCompany({ id: "u2", name: "Nova Core", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  assert.notEqual(state.companies.u1.name, state.companies.u2.name);
+  assert.notEqual(state.stocks.u1.ticker, state.stocks.u2.ticker);
+});
+
 test("richest leaderboard includes billionaires with company stake", () => {
   const state = createInitialState({ seed: 90 });
   upsertCompany(state, createCompany({ id: "rx", name: "Rank Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));
@@ -330,4 +352,30 @@ test("global all index tracks all listed stocks with valuation weighting", () =>
   assert.equal(state.indexes.GLOBAL_ALL.members.length, 2);
   assert.ok(state.indexes.GLOBAL_ALL.members.includes(state.stocks.big.ticker));
   assert.ok(state.indexes.GLOBAL_ALL.members.includes(state.stocks.small.ticker));
+});
+
+test("global 50 index is available and market-cap weighted", () => {
+  const state = createInitialState({ seed: 113 });
+  for (let i = 0; i < 60; i += 1) {
+    upsertCompany(
+      state,
+      createCompany({
+        id: `g50-${i}`,
+        name: `Global Fifty ${i}`,
+        country: "USA",
+        sector: i % 2 === 0 ? "AI" : "Banking",
+        businessModel: "SaaS",
+        initialValuation: 1_000_000_000 + i * 30_000_000
+      })
+    );
+  }
+
+  runTick(state);
+
+  assert.ok(state.indexes.GLOBAL50);
+  assert.equal(state.indexes.GLOBAL50.members.length, 50);
+  assert.ok(Array.isArray(state.indexes.GLOBAL50.weights));
+  assert.equal(state.indexes.GLOBAL50.weights.length, 50);
+  const weightSum = state.indexes.GLOBAL50.weights.reduce((sum, entry) => sum + Number(entry.weightPct ?? 0), 0);
+  assert.ok(weightSum > 99.9 && weightSum < 100.1);
 });

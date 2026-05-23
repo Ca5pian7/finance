@@ -63,6 +63,7 @@ export function createInitialState({ seed = 42 } = {}) {
     },
     indexes: {
       GLOBAL100: { value: 1000, changePct: 0, members: [] },
+      GLOBAL50: { value: 1000, changePct: 0, members: [] },
       GLOBAL_ALL: { value: 1000, changePct: 0, members: [] }
     },
     leaderboards: {
@@ -178,6 +179,7 @@ export function createCompany({
       supportBreakPressure: 0,
       resistanceBreakPressure: 0,
       newsMomentum: 0,
+      movementProfile: createMovementProfile({ id, name, sector, businessModel }),
       candles: []
     }
   };
@@ -198,9 +200,88 @@ export function createTicker(name, fallback) {
 }
 
 export function upsertCompany(state, company) {
-  state.companies[company.id] = structuredClone(company);
-  state.stocks[company.id] = structuredClone(company.stock);
+  const nextCompany = structuredClone(company);
+  nextCompany.name = createUniqueCompanyName(state, nextCompany.id, nextCompany.name);
+  nextCompany.stock.ticker = createUniqueTicker(state, nextCompany.id, nextCompany.stock.ticker);
+  if (!nextCompany.stock.movementProfile) {
+    nextCompany.stock.movementProfile = createMovementProfile({
+      id: nextCompany.id,
+      name: nextCompany.name,
+      sector: nextCompany.sector,
+      businessModel: nextCompany.businessModel
+    });
+  }
+
+  state.companies[nextCompany.id] = nextCompany;
+  state.stocks[nextCompany.id] = structuredClone(nextCompany.stock);
   state.orderBooks[company.id] = { buy: [], sell: [] };
+}
+
+function createUniqueCompanyName(state, companyId, requestedName) {
+  const base = String(requestedName ?? companyId).trim() || companyId;
+  const existing = new Set(
+    Object.entries(state.companies)
+      .filter(([id]) => id !== companyId)
+      .map(([, c]) => String(c.name ?? "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  if (!existing.has(base.toLowerCase())) return base;
+  let suffix = 2;
+  let candidate = `${base} ${suffix}`;
+  while (existing.has(candidate.toLowerCase())) {
+    suffix += 1;
+    candidate = `${base} ${suffix}`;
+  }
+  return candidate;
+}
+
+function createUniqueTicker(state, companyId, requestedTicker) {
+  const cleanRequested = String(requestedTicker ?? "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
+  const base = cleanRequested.length >= 2 ? cleanRequested.slice(0, 5) : `S${String(companyId).replace(/[^A-Za-z0-9]/g, "").toUpperCase()}`.slice(0, 5);
+  const existing = new Set(
+    Object.entries(state.stocks)
+      .filter(([id]) => id !== companyId)
+      .map(([, stock]) => String(stock.ticker ?? "").toUpperCase())
+      .filter(Boolean)
+  );
+  if (!existing.has(base)) return base;
+  let suffix = 2;
+  while (suffix < 46656) {
+    const suffixCode = suffix.toString(36).toUpperCase();
+    const ticker = `${base.slice(0, Math.max(2, 5 - suffixCode.length))}${suffixCode}`;
+    if (!existing.has(ticker)) return ticker;
+    suffix += 1;
+  }
+  return `${base.slice(0, 3)}${Date.now().toString(36).toUpperCase().slice(-2)}`;
+}
+
+function hashString(input) {
+  let hash = 0;
+  for (const char of String(input ?? "")) {
+    hash = (hash * 31 + char.charCodeAt(0)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function createMovementProfile({ id, name, sector, businessModel }) {
+  const seed = hashString(`${id}:${name}:${sector}:${businessModel}`);
+  const normalized = (seed % 1000) / 1000;
+  const sectorBias = {
+    AI: 1.2,
+    Crypto: 1.35,
+    Semiconductor: 1.15,
+    Energy: 1.05,
+    Banking: 0.9,
+    Pharma: 0.92,
+    Utilities: 0.85
+  };
+  const baseVolatility = 0.78 + normalized * 0.74;
+  const volatility = Number((baseVolatility * (sectorBias[sector] ?? 1)).toFixed(3));
+  const momentumSensitivity = Number((0.75 + ((seed >> 5) % 1000) / 1000 * 0.7).toFixed(3));
+  const style = volatility >= 1.25 ? "aggressive" : volatility <= 0.95 ? "defensive" : "balanced";
+  return { volatility: Math.min(1.8, Math.max(0.65, volatility)), momentumSensitivity, style };
 }
 
 function createPopulation(seed) {
