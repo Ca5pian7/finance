@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>World Finance Simulator MVP</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { font-family: Inter, Arial, sans-serif; margin: 0; background: #090d14; color: #f4f7ff; }
+      .wrap { padding: 20px; max-width: 1200px; margin: auto; }
+      .card { background: #121a2b; border: 1px solid #273149; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+      .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #273149; }
+      .ticker { color: #88d6ff; font-weight: 700; }
+      .muted { color: #a3aec6; }
+      button { background: #2e69ff; color: white; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+      input, select { background: #0e1523; color: #f4f7ff; border: 1px solid #273149; border-radius: 6px; padding: 8px; width: 100%; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>World Finance Simulator (MVP)</h1>
+      <p class="muted">Realtime macro + company + stock simulation with deterministic tick engine.</p>
+
+      <div class="card">
+        <h3>Macro</h3>
+        <div id="macro">Loading...</div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Create Company</h3>
+          <label>Name <input id="name" value="Aether Dynamics" /></label><br /><br />
+          <label>Country <input id="country" value="USA" /></label><br /><br />
+          <label>Sector <input id="sector" value="AI" /></label><br /><br />
+          <button id="createBtn">Create</button>
+        </div>
+        <div class="card">
+          <h3>Headlines</h3>
+          <ul id="headlines"></ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Stocks</h3>
+        <table>
+          <thead>
+            <tr><th>Ticker</th><th>Price</th><th>Market Cap</th><th>P/E</th><th>Volume</th><th>Halt</th></tr>
+          </thead>
+          <tbody id="stocks"></tbody>
+        </table>
+      </div>
+    </div>
+    <script>
+      const macroEl = document.getElementById("macro");
+      const stocksEl = document.getElementById("stocks");
+      const headlinesEl = document.getElementById("headlines");
+
+      function n(v) { return Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+
+      function render(state) {
+        macroEl.textContent = `Tick ${state.tick} | GDP ${(state.macro.gdpGrowth * 100).toFixed(2)}% | Inflation ${(state.macro.inflation * 100).toFixed(2)}% | Unemployment ${(state.macro.unemployment * 100).toFixed(2)}% | Rate ${(state.macro.rate * 100).toFixed(2)}% | Sentiment ${(state.sentiment * 100).toFixed(1)}%`;
+        stocksEl.innerHTML = state.stocks.map((s) => `<tr><td class="ticker">${s.ticker}</td><td>${n(s.lastPrice)}</td><td>${n(s.marketCap)}</td><td>${n(s.peRatio)}</td><td>${n(s.volume)}</td><td>${s.halted ? "Yes" : "No"}</td></tr>`).join("");
+        headlinesEl.innerHTML = state.headlines.map((h) => `<li>${h.headline}</li>`).join("");
+      }
+
+      async function createCompany() {
+        await fetch("/api/company", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: document.getElementById("name").value,
+            country: document.getElementById("country").value,
+            sector: document.getElementById("sector").value
+          })
+        });
+      }
+
+      document.getElementById("createBtn").addEventListener("click", createCompany);
+
+      const stream = new EventSource("/api/stream");
+      stream.onmessage = (evt) => render(JSON.parse(evt.data));
+    </script>
+  </body>
+</html>
