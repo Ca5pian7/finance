@@ -1,0 +1,14 @@
+{
+  "name": "world-finance-simulator",
+  "version": "0.1.0",
+  "description": "MVP implementation of a global economic and stock market simulator.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "simulate": "node src/cli/simulate.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
