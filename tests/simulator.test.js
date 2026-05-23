@@ -139,3 +139,74 @@ test("market session advances with day/night cycle and 10M participant populatio
   assert.ok(state.stocks.m1.stability >= 0.1 && state.stocks.m1.stability <= 0.98);
   assert.ok(state.stocks.m1.buyPressure >= 0.05 && state.stocks.m1.buyPressure <= 0.95);
 });
+
+test("inflation and policy rate can move both up and down over time", () => {
+  const state = createInitialState({ seed: 55 });
+  upsertCompany(state, createCompany({ id: "mx", name: "Macro Flex", country: "USA", sector: "Banking", businessModel: "B2B" }));
+
+  let prevInflation = state.macro.inflation;
+  let prevRate = state.macro.rate;
+  let inflationUp = 0;
+  let inflationDown = 0;
+  let rateUp = 0;
+  let rateDown = 0;
+
+  for (let i = 0; i < 500; i += 1) {
+    runTick(state);
+    if (state.macro.inflation > prevInflation) inflationUp += 1;
+    else if (state.macro.inflation < prevInflation) inflationDown += 1;
+    if (state.macro.rate > prevRate) rateUp += 1;
+    else if (state.macro.rate < prevRate) rateDown += 1;
+    prevInflation = state.macro.inflation;
+    prevRate = state.macro.rate;
+  }
+
+  assert.ok(inflationUp > 0 && inflationDown > 0);
+  assert.ok(rateUp > 0 && rateDown > 0);
+});
+
+test("player buy and sell orders update cash and holdings", () => {
+  const state = createInitialState({ seed: 88 });
+  upsertCompany(state, createCompany({ id: "px", name: "Player Exchange", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  const startCash = state.player.cash;
+  placeOrder(state, { companyId: "px", side: "sell", orderType: "limit", price: 10, quantity: 100, traderId: "maker-sell" });
+  const buyTrades = placeOrder(state, { companyId: "px", side: "buy", orderType: "limit", price: 12, quantity: 40, traderId: "player" });
+  assert.equal(buyTrades.length, 1);
+  assert.equal(state.player.holdings.px, 40);
+  assert.ok(state.player.cash < startCash);
+
+  const afterBuyCash = state.player.cash;
+  placeOrder(state, { companyId: "px", side: "buy", orderType: "limit", price: 9.5, quantity: 30, traderId: "maker-buy" });
+  const sellTrades = placeOrder(state, { companyId: "px", side: "sell", orderType: "limit", price: 9, quantity: 10, traderId: "player" });
+  assert.equal(sellTrades.length, 1);
+  assert.equal(state.player.holdings.px, 30);
+  assert.ok(state.player.cash > afterBuyCash);
+});
+
+test("player orders enforce cash and position constraints", () => {
+  const state = createInitialState({ seed: 89 });
+  upsertCompany(state, createCompany({ id: "cx", name: "Constraint Co", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  state.player.cash = 100;
+  assert.throws(
+    () => placeOrder(state, { companyId: "cx", side: "buy", orderType: "limit", price: 10, quantity: 20, traderId: "player" }),
+    /Insufficient cash balance/
+  );
+
+  assert.throws(
+    () => placeOrder(state, { companyId: "cx", side: "sell", orderType: "limit", price: 10, quantity: 1, traderId: "player" }),
+    /Insufficient shares to sell/
+  );
+});
+
+test("richest leaderboard includes top 25 entries with player net worth", () => {
+  const state = createInitialState({ seed: 90 });
+  upsertCompany(state, createCompany({ id: "rx", name: "Rank Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  runTick(state);
+
+  assert.equal(state.leaderboards.richest.length, 25);
+  assert.ok(state.leaderboards.richest.every((entry) => Number.isFinite(entry.netWorth ?? entry.wealth)));
+  assert.ok(state.leaderboards.richest.some((entry) => entry.id === "player"));
+});

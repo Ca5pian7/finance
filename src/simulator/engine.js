@@ -2,6 +2,8 @@ import { createRng } from "./random.js";
 
 const STOCK_DAY_TICKS = 300;
 const SIM_MS_PER_TICK = Math.round((24 * 60 * 60 * 1000) / STOCK_DAY_TICKS);
+const TARGET_INFLATION = 0.025;
+const NEUTRAL_RATE = 0.03;
 
 function bounded(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -26,6 +28,28 @@ function asPct(value) {
   return Number((value * 100).toFixed(2));
 }
 
+function getPlayerHoldingShares(state, companyId) {
+  return Number(state.player?.holdings?.[companyId] ?? 0);
+}
+
+function settlePlayerTrade(state, companyId, side, quantity, price) {
+  if (!state.player) return;
+  if (!state.player.holdings) state.player.holdings = {};
+  const notional = quantity * price;
+  const prevShares = getPlayerHoldingShares(state, companyId);
+
+  if (side === "buy") {
+    state.player.cash = Number((state.player.cash - notional).toFixed(2));
+    state.player.holdings[companyId] = prevShares + quantity;
+    return;
+  }
+
+  state.player.cash = Number((state.player.cash + notional).toFixed(2));
+  const remaining = Math.max(0, prevShares - quantity);
+  if (remaining === 0) delete state.player.holdings[companyId];
+  else state.player.holdings[companyId] = remaining;
+}
+
 export function placeOrder(state, order) {
   const book = state.orderBooks[order.companyId];
   if (!book) throw new Error("Unknown company");
@@ -39,6 +63,16 @@ export function placeOrder(state, order) {
     price = Number(Math.max(0.0001, stock.lastPrice * aggressive).toFixed(4));
   }
   if (!Number.isFinite(price) || price <= 0) throw new Error("Invalid order price");
+  if (order.traderId === "player") {
+    const qty = Number(order.quantity);
+    const estimatedNotional = qty * price;
+    if (order.side === "buy" && estimatedNotional > (state.player?.cash ?? 0)) {
+      throw new Error("Insufficient cash balance");
+    }
+    if (order.side === "sell" && qty > getPlayerHoldingShares(state, order.companyId)) {
+      throw new Error("Insufficient shares to sell");
+    }
+  }
   book[order.side].push({
     id: `${state.tick}-${book[order.side].length + 1}-${order.side}`,
     traderId: order.traderId ?? "system",
@@ -87,6 +121,9 @@ export function matchOrderBook(state, companyId) {
       buyTraderId: bid.traderId,
       sellTraderId: ask.traderId
     });
+
+    if (bid.traderId === "player") settlePlayerTrade(state, companyId, "buy", quantity, stock.lastPrice);
+    if (ask.traderId === "player") settlePlayerTrade(state, companyId, "sell", quantity, stock.lastPrice);
   }
 
   return trades;
@@ -94,20 +131,39 @@ export function matchOrderBook(state, companyId) {
 
 function updateMacro(state, rng) {
   const oilShock = (state.commodities.OIL.price - 80) / 80;
-  const supplyShock = state.supplyChains.pressure * 0.004;
-  const policyShock = state.policyPressure * 0.002;
+  const supplyShock = state.supplyChains.pressure * 0.003;
+  const policyShock = state.policyPressure * 0.0015;
+  const inflationGap = state.macro.inflation - TARGET_INFLATION;
   state.macro.inflation = bounded(
-    state.macro.inflation + (rng() - 0.5) * 0.002 + oilShock * 0.0015 + supplyShock + policyShock,
+    state.macro.inflation + (rng() - 0.5) * 0.0024 + oilShock * 0.0018 + supplyShock + policyShock - inflationGap * 0.08,
     0.005,
     0.18
   );
+  const rateGap = state.macro.rate - NEUTRAL_RATE;
   state.macro.unemployment = bounded(
-    state.macro.unemployment + (state.macro.rate - 0.03) * 0.02 + state.geopolitics.tension * 0.002 + (rng() - 0.5) * 0.001,
+    state.macro.unemployment +
+      rateGap * 0.012 +
+      state.geopolitics.tension * 0.0018 -
+      state.sentiment * 0.0008 +
+      (rng() - 0.5) * 0.0012,
     0.02,
     0.25
   );
-  state.macro.gdpGrowth = bounded(0.03 - state.macro.inflation * 0.15 - state.macro.unemployment * 0.25 + (rng() - 0.5) * 0.004, -0.09, 0.08);
-  state.macro.rate = bounded(state.macro.rate + (state.macro.inflation - 0.025) * 0.3, 0, 0.15);
+  state.macro.gdpGrowth = bounded(
+    0.03 -
+      state.macro.inflation * 0.14 -
+      state.macro.unemployment * 0.22 +
+      state.sentiment * 0.01 +
+      (rng() - 0.5) * 0.005,
+    -0.09,
+    0.08
+  );
+  const policyTarget =
+    NEUTRAL_RATE +
+    (state.macro.inflation - TARGET_INFLATION) * 1.2 +
+    (0.055 - state.macro.unemployment) * 0.35 +
+    state.policyPressure * 0.01;
+  state.macro.rate = bounded(state.macro.rate + (policyTarget - state.macro.rate) * 0.16 + (rng() - 0.5) * 0.0006, 0, 0.15);
 }
 
 function updateCommodities(state, rng) {
@@ -214,6 +270,13 @@ function updateCompany(state, companyId, rng) {
 
   const intrinsicPrice = Math.max(0.1, company.valuation / stock.sharesOutstanding);
   const valuationGap = (intrinsicPrice - stock.lastPrice) / Math.max(0.1, stock.lastPrice);
+  const recentCandles = stock.candles.slice(-40);
+  const rangeHigh = recentCandles.length ? Math.max(...recentCandles.map((c) => c.high)) : stock.lastPrice;
+  const rangeLow = recentCandles.length ? Math.min(...recentCandles.map((c) => c.low)) : stock.lastPrice;
+  const support = bounded(rangeLow * 0.995, 0.1, rangeHigh);
+  const resistance = Math.max(support + 0.0001, rangeHigh * 1.005);
+  stock.support = Number(support.toFixed(4));
+  stock.resistance = Number(resistance.toFixed(4));
   const fundamentalReturn =
     company.kpis.growth * 0.05 +
     company.kpis.profitMargin * 0.02 +
@@ -227,8 +290,17 @@ function updateCompany(state, companyId, rng) {
     state.supplyChains.pressure * 0.012;
   const meanReversion = valuationGap * 0.08;
   const crowdReturn = crowd.pressureGap * 0.035;
-  const random = (rng() - 0.5) * 0.008;
-  const baseReturn = fundamentalReturn + macroReturn + meanReversion + crowdReturn + random;
+  const supportDistance = (stock.lastPrice - support) / Math.max(0.0001, stock.lastPrice);
+  const resistanceDistance = (resistance - stock.lastPrice) / Math.max(0.0001, stock.lastPrice);
+  const supportBounce = supportDistance < 0.02 ? (0.02 - supportDistance) * 0.32 : 0;
+  const resistanceDrag = resistanceDistance < 0.02 ? (0.02 - resistanceDistance) * 0.24 : 0;
+  const downsidePressure =
+    Math.max(0, state.macro.inflation - TARGET_INFLATION) * 0.35 +
+    state.supplyChains.pressure * 0.08 +
+    state.geopolitics.tension * 0.06 +
+    Math.max(0, -company.kpis.growth) * 0.18;
+  const random = (rng() - 0.5) * 0.012;
+  const baseReturn = fundamentalReturn + macroReturn + meanReversion + crowdReturn + supportBounce - resistanceDrag - downsidePressure * 0.02 + random;
   const maxMove = bounded(
     0.01 +
       (1 - stock.stability) * 0.03 +
@@ -243,6 +315,7 @@ function updateCompany(state, companyId, rng) {
   stock.halted = false;
   stock.lastPrice = Number(clamped.toFixed(4));
   stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
+  company.valuation = Number((company.valuation * 0.6 + stock.marketCap * 0.4).toFixed(2));
   stock.peRatio = Number((Math.max(1, stock.marketCap / Math.max(1, company.kpis.revenue * company.kpis.profitMargin))).toFixed(2));
   stock.shortInterest = bounded(stock.shortInterest + (rng() - 0.5) * 0.01 + (state.sentiment < 0 ? 0.003 : -0.002), 0, 0.5);
   stock.dividendYield = bounded(0.005 + company.kpis.profitMargin * 0.06 - company.kpis.growth * 0.02, 0, 0.09);
@@ -343,17 +416,32 @@ function updateLeaderboards(state) {
     .sort((a, b) => b.valuation - a.valuation)
     .slice(0, 10);
 
-  state.leaderboards.richest = state.population.agents
-    .map((agent) => ({ id: agent.id, type: agent.type, wealth: agent.wealth }))
-    .sort((a, b) => b.wealth - a.wealth)
-    .slice(0, 10);
+  const holdings = state.player?.holdings ?? {};
+  const holdingsValue = Object.entries(holdings).reduce((sum, [companyId, qty]) => {
+    const stock = state.stocks[companyId];
+    if (!stock || !stock.listed) return sum;
+    return sum + Number(qty) * stock.lastPrice;
+  }, 0);
+  state.player.netWorth = Math.max(500_000, Math.round((state.player.cash ?? 0) + holdingsValue));
 
-  const listedWorth = Object.values(state.stocks)
-    .filter((s) => s.listed)
-    .reduce((sum, s) => sum + s.marketCap * 0.000001, 0);
-  const cap = state.player.cash ?? 50_000_000_000;
-  state.player.netWorth = Math.min(cap, Math.max(500_000, Math.round(cap * 0.95 + listedWorth * (0.0015 + state.player.influence * 0.0008))));
-  state.player.rank = state.leaderboards.richest.findIndex((agent) => agent.wealth <= state.player.netWorth) + 1;
+  const richestPool = [
+    ...state.population.agents.map((agent) => ({
+      id: agent.id,
+      name: agent.id,
+      type: agent.type,
+      wealth: agent.wealth,
+      netWorth: agent.wealth
+    })),
+    {
+      id: "player",
+      name: "You",
+      type: "player",
+      wealth: state.player.netWorth,
+      netWorth: state.player.netWorth
+    }
+  ];
+  state.leaderboards.richest = richestPool.sort((a, b) => b.wealth - a.wealth).slice(0, 25);
+  state.player.rank = richestPool.filter((entry) => entry.wealth > state.player.netWorth).length + 1;
 }
 
 function requireCompany(state, companyId) {
@@ -401,6 +489,7 @@ export function executeStrategicAction(state, payload = {}) {
       const move = direction === "pump" ? 0.02 * intensity : -0.025 * intensity;
       stock.lastPrice = Number(Math.max(0.1, stock.lastPrice * (1 + move)).toFixed(4));
       stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
+      company.valuation = Number((company.valuation * 0.75 + stock.marketCap * 0.25).toFixed(2));
       stock.shortInterest = bounded(stock.shortInterest + (direction === "pump" ? -0.015 : 0.03), 0, 0.5);
       state.sentiment = bounded(state.sentiment + (direction === "pump" ? 0.01 : -0.02), -1, 1);
       pushHeadline(
@@ -490,6 +579,12 @@ function snapshotCandle(state, companyId, open, rng) {
 }
 
 export function runTick(state, { events = [] } = {}) {
+  if (!state.player) {
+    state.player = { role: "startup founder", cash: 50_000_000_000, netWorth: 50_000_000_000, influence: 0.1, rank: 0, holdings: {} };
+  }
+  if (!Number.isFinite(state.player?.cash)) state.player.cash = 50_000_000_000;
+  if (!Number.isFinite(state.player?.netWorth)) state.player.netWorth = state.player.cash;
+  if (!state.player?.holdings) state.player.holdings = {};
   state.tick += 1;
   const ticksPerDay = state.marketSession?.ticksPerDay ?? STOCK_DAY_TICKS;
   state.time = new Date(new Date(state.time).getTime() + SIM_MS_PER_TICK).toISOString();
