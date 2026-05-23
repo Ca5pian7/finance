@@ -1,6 +1,13 @@
 import { COMMODITIES, COUNTRIES, COUNTRY_PROFILES, DEFAULT_MACRO, SECTORS, SUPPLY_REGIONS } from "./constants.js";
 import { createRng, pick } from "./random.js";
 
+export function calculatePeRatio({ marketCap, revenue, profitMargin }) {
+  const earnings = Number(revenue) * Number(profitMargin);
+  if (!Number.isFinite(earnings) || Math.abs(earnings) < 0.0001) return null;
+  const peRatio = Number(marketCap) / earnings;
+  return Number.isFinite(peRatio) ? Number(peRatio.toFixed(2)) : null;
+}
+
 export function createInitialState({ seed = 42 } = {}) {
   const governments = Object.fromEntries(
     COUNTRIES.map((country) => [
@@ -111,6 +118,8 @@ export function createCompany({
   const publicFloatPct = Number((100 - boundedPrincipalStakePct).toFixed(4));
   const principalShares = Math.round((sharesOutstanding * boundedPrincipalStakePct) / 100);
   const publicFloatShares = Math.max(1, sharesOutstanding - principalShares);
+  const initialRevenue = initialValuation * 0.18;
+  const initialProfitMargin = 0.14;
 
   return {
     id,
@@ -129,8 +138,8 @@ export function createCompany({
     supplyRisk: 0.2,
     carbonEmissions: Math.round(employees * 0.6),
     kpis: {
-      revenue: initialValuation * 0.18,
-      profitMargin: 0.14,
+      revenue: initialRevenue,
+      profitMargin: initialProfitMargin,
       growth: 0.03,
       debtRatio: 0.22
     },
@@ -147,7 +156,7 @@ export function createCompany({
       publicFloatShares,
       lastPrice: initialPrice,
       marketCap: initialValuation,
-      peRatio: 18,
+      peRatio: calculatePeRatio({ marketCap: initialValuation, revenue: initialRevenue, profitMargin: initialProfitMargin }),
       shortInterest: 0.03,
       dividendYield: 0.01,
       listed: true,

@@ -1,4 +1,5 @@
 import { createRng } from "./random.js";
+import { calculatePeRatio } from "./state.js";
 
 const STOCK_DAY_TICKS = 300;
 const SIM_MS_PER_TICK = Math.round((24 * 60 * 60 * 1000) / STOCK_DAY_TICKS);
@@ -45,6 +46,15 @@ function getPublicFloatShares(stock) {
   return Math.max(1, Number(stock?.sharesOutstanding ?? 0));
 }
 
+function syncStockDerivedMetrics(stock, company) {
+  stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
+  stock.peRatio = calculatePeRatio({
+    marketCap: stock.marketCap,
+    revenue: company?.kpis?.revenue,
+    profitMargin: company?.kpis?.profitMargin
+  });
+}
+
 function seedMarketLiquidity(state, companyId) {
   const book = state.orderBooks[companyId];
   const stock = state.stocks[companyId];
@@ -87,17 +97,16 @@ function settlePlayerTrade(state, companyId, side, quantity, price) {
   if (!state.player.holdings) state.player.holdings = {};
   const notional = quantity * price;
   const prevShares = getPlayerHoldingShares(state, companyId);
+  const nextShares = side === "buy" ? prevShares + quantity : prevShares - quantity;
 
   if (side === "buy") {
     state.player.cash = Number((state.player.cash - notional).toFixed(2));
-    state.player.holdings[companyId] = prevShares + quantity;
-    return;
+  } else {
+    state.player.cash = Number((state.player.cash + notional).toFixed(2));
   }
 
-  state.player.cash = Number((state.player.cash + notional).toFixed(2));
-  const remaining = Math.max(0, prevShares - quantity);
-  if (remaining === 0) delete state.player.holdings[companyId];
-  else state.player.holdings[companyId] = remaining;
+  if (nextShares === 0) delete state.player.holdings[companyId];
+  else state.player.holdings[companyId] = nextShares;
 }
 
 export function placeOrder(state, order) {
@@ -117,14 +126,15 @@ export function placeOrder(state, order) {
   if (!Number.isFinite(price) || price <= 0) throw new Error("Invalid order price");
   if (order.traderId === "player") {
     const estimatedNotional = quantity * price;
+    const currentShares = getPlayerHoldingShares(state, order.companyId);
     if (order.side === "buy" && estimatedNotional > (state.player?.cash ?? 0)) {
       throw new Error("Insufficient cash balance");
     }
-    if (order.side === "buy" && getPlayerHoldingShares(state, order.companyId) + quantity > getPublicFloatShares(stock)) {
+    if (order.side === "buy" && currentShares + quantity > getPublicFloatShares(stock)) {
       throw new Error("Insufficient public float available");
     }
-    if (order.side === "sell" && quantity > getPlayerHoldingShares(state, order.companyId)) {
-      throw new Error("Insufficient shares to sell");
+    if (order.side === "sell" && currentShares - quantity < -getPublicFloatShares(stock)) {
+      throw new Error("Insufficient borrow availability to short");
     }
     const oppositeSide = order.side === "buy" ? "sell" : "buy";
     if (!book[oppositeSide].length) seedMarketLiquidity(state, order.companyId);
@@ -173,7 +183,7 @@ export function matchOrderBook(state, companyId) {
 
     stock.lastPrice = Number(tradePrice.toFixed(4));
     stock.volume += quantity;
-    stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
+    syncStockDerivedMetrics(stock, company);
     if (company) {
       const valuationBlend = bounded(0.1 + participation * 4, 0.1, 0.5);
       company.valuation = Number((company.valuation * (1 - valuationBlend) + stock.marketCap * valuationBlend).toFixed(2));
@@ -379,9 +389,8 @@ function updateCompany(state, companyId, rng) {
   const clamped = bounded(nextPrice, stock.lastPrice * (1 - maxMove), stock.lastPrice * (1 + maxMove));
   stock.halted = false;
   stock.lastPrice = Number(clamped.toFixed(4));
-  stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
+  syncStockDerivedMetrics(stock, company);
   company.valuation = Number((company.valuation * 0.6 + stock.marketCap * 0.4).toFixed(2));
-  stock.peRatio = Number((Math.max(1, stock.marketCap / Math.max(1, company.kpis.revenue * company.kpis.profitMargin))).toFixed(2));
   stock.shortInterest = bounded(stock.shortInterest + (rng() - 0.5) * 0.01 + (state.sentiment < 0 ? 0.003 : -0.002), 0, 0.5);
   stock.dividendYield = bounded(0.005 + company.kpis.profitMargin * 0.06 - company.kpis.growth * 0.02, 0, 0.09);
   stock.listed = true;
@@ -508,6 +517,7 @@ function updateLeaderboards(state) {
 
   let playerCompanyStake = null;
   for (const [companyId, qty] of Object.entries(holdings)) {
+    if (qty <= 0) continue;
     const stock = state.stocks[companyId];
     if (!stock) continue;
     const stakePct = getStakePctForShares(stock, qty);
@@ -555,6 +565,8 @@ export function executeMerger(state, { buyerId, targetId }) {
   buyer.marketDominance = bounded(buyer.marketDominance + 0.08, 0, 1);
   buyer.politicalInfluence = bounded(buyer.politicalInfluence + 0.05, 0, 1);
   buyer.kpis.revenue = Number((buyer.kpis.revenue + target.kpis.revenue * 0.85).toFixed(2));
+  const buyerStock = state.stocks[buyerId];
+  if (buyerStock) syncStockDerivedMetrics(buyerStock, buyer);
   const targetStock = state.stocks[targetId];
   if (targetStock) {
     targetStock.listed = true;
@@ -583,7 +595,7 @@ export function executeStrategicAction(state, payload = {}) {
       const direction = payload.direction === "dump" ? "dump" : "pump";
       const move = direction === "pump" ? 0.02 * intensity : -0.025 * intensity;
       stock.lastPrice = Number(Math.max(0.1, stock.lastPrice * (1 + move)).toFixed(4));
-      stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
+      syncStockDerivedMetrics(stock, company);
       company.valuation = Number((company.valuation * 0.75 + stock.marketCap * 0.25).toFixed(2));
       stock.shortInterest = bounded(stock.shortInterest + (direction === "pump" ? -0.015 : 0.03), 0, 0.5);
       state.sentiment = bounded(state.sentiment + (direction === "pump" ? 0.01 : -0.02), -1, 1);
