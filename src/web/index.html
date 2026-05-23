@@ -612,6 +612,11 @@
           <div class="tiny" id="mGlobal100Chg" style="margin-top:4px">--</div>
         </div>
         <div class="index-card">
+          <div class="card-title">GLOBAL50</div>
+          <div class="index-val" id="mGlobal50">--</div>
+          <div class="tiny" id="mGlobal50Chg" style="margin-top:4px">--</div>
+        </div>
+        <div class="index-card">
           <div class="card-title">GLOBAL ALL</div>
           <div class="index-val" id="mGlobalAll">--</div>
           <div class="tiny" id="mGlobalAllChg" style="margin-top:4px">--</div>
@@ -1140,12 +1145,19 @@
       function renderMarkets(state) {
         const stocks = state.stocks ?? [];
         const idx = state.indexes?.GLOBAL100;
+        const global50 = state.indexes?.GLOBAL50;
         const globalAll = state.indexes?.GLOBAL_ALL;
 
         $("mGlobal100").textContent = idx ? n(idx.value) : "--";
         $("mGlobal100Chg").innerHTML = idx
           ? `<span style="color:${idx.changePct >= 0 ? "var(--up)" : "var(--down)"}">
               ${idx.changePct >= 0 ? "+" : ""}${idx.changePct}% today
+            </span>`
+          : "--";
+        $("mGlobal50").textContent = global50 ? n(global50.value) : "--";
+        $("mGlobal50Chg").innerHTML = global50
+          ? `<span style="color:${global50.changePct >= 0 ? "var(--up)" : "var(--down)"}">
+              ${global50.changePct >= 0 ? "+" : ""}${global50.changePct}% today
             </span>`
           : "--";
         $("mGlobalAll").textContent = globalAll ? n(globalAll.value) : "--";

@@ -6,6 +6,7 @@ This repository now contains an executable V10 foundation for a realistic global
 
 - Deterministic tick-based simulation loop
 - Company creation system (sector/country/business model + core KPIs)
+  - Automatic unique company naming/ticker normalization on listing
 - Market microstructure
   - Buy/sell order books
   - Founder/public-float ownership split so new listings are tradeable
@@ -27,6 +28,7 @@ This repository now contains an executable V10 foundation for a realistic global
 - Supply chain + regional pressure model
 - AI population model (consumers, investors, CEOs, workers, politicians, influencers)
 - Funds/index layer (institutional/hedge/retail liquidity + valuation-weighted GLOBAL100 and GLOBAL ALL indexes)
+  - Added valuation-weighted GLOBAL50 index and per-index constituent weight snapshots
 - Corporate mergers with delisting outcomes and leaderboard progression
 - Persistence + offline progression
   - Checkpoint save/load
