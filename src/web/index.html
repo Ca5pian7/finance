@@ -3,69 +3,95 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>World Finance Simulator | Moonshot Dashboard</title>
+    <title>World Finance Simulator | Market OS</title>
     <style>
       :root {
         color-scheme: dark;
-        --bg: #060a14;
-        --card: rgba(14, 22, 38, 0.8);
-        --line: rgba(143, 164, 207, 0.25);
+        --bg: #070b15;
+        --bg2: #0c1323;
+        --card: rgba(14, 22, 38, 0.86);
+        --line: rgba(143, 164, 207, 0.2);
         --text: #edf2ff;
-        --muted: #a0acc5;
+        --muted: #9ca9c5;
         --up: #45f6b0;
         --down: #ff7f9c;
-        --accent: #5ea8ff;
+        --accent: #63adff;
+        --accent2: #8d5bff;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-        background: radial-gradient(circle at 20% 0%, #1a2748 0%, var(--bg) 45%);
         color: var(--text);
+        background:
+          radial-gradient(circle at 12% -10%, #233764 0%, transparent 38%),
+          radial-gradient(circle at 95% -15%, #1f265a 0%, transparent 34%),
+          linear-gradient(170deg, var(--bg2), var(--bg));
       }
-      .wrap { max-width: 1440px; margin: 0 auto; padding: 20px; }
-      .headline {
+      .wrap { max-width: 1520px; margin: 0 auto; padding: 20px; }
+      .topbar {
         display: flex;
         justify-content: space-between;
-        align-items: flex-end;
+        align-items: center;
+        gap: 16px;
         margin-bottom: 16px;
-        gap: 10px;
       }
-      h1, h2, h3 { margin: 0 0 10px; font-weight: 600; letter-spacing: 0.2px; }
+      h1, h2, h3 { margin: 0 0 10px; font-weight: 600; }
       .muted { color: var(--muted); }
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 12px;
+        background: rgba(99, 173, 255, 0.08);
+      }
+      .nav { display: flex; gap: 8px; margin: 10px 0 16px; flex-wrap: wrap; }
+      .nav button {
+        width: auto;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        padding: 8px 14px;
+        background: rgba(10, 20, 35, 0.9);
+        color: var(--text);
+      }
+      .nav button.active {
+        background: linear-gradient(120deg, var(--accent2), var(--accent));
+        border: 0;
+      }
       .grid { display: grid; gap: 14px; }
-      .stats { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 14px; }
-      .main { grid-template-columns: 2fr 1fr; align-items: start; }
-      .lower { margin-top: 14px; grid-template-columns: 2fr 1fr; }
+      .stats { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); margin-bottom: 14px; }
+      .page { display: none; }
+      .page.active { display: block; }
       .card {
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 14px;
         padding: 14px;
-        backdrop-filter: blur(12px);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(14px);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
       }
       .stat-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
       .stat-value { font-size: 20px; font-weight: 700; }
       .up { color: var(--up); }
       .down { color: var(--down); }
-      .market-layout { display: grid; grid-template-columns: 1.8fr 1fr; gap: 12px; }
-      canvas { width: 100%; height: 280px; background: rgba(5, 10, 20, 0.8); border-radius: 10px; border: 1px solid var(--line); }
+      .market-layout { display: grid; grid-template-columns: 2.1fr 1fr; gap: 12px; }
+      canvas { width: 100%; height: 420px; background: rgba(5, 10, 20, 0.86); border-radius: 10px; border: 1px solid var(--line); }
       table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      th, td { border-bottom: 1px solid var(--line); padding: 7px 6px; text-align: left; }
+      th, td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; }
       th { color: var(--muted); font-weight: 500; }
       tr:hover { background: rgba(90, 140, 255, 0.08); cursor: pointer; }
       .ticker { font-weight: 700; color: #9ed1ff; }
-      .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .split { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+      .stack { display: grid; gap: 12px; }
       .form-group { margin-bottom: 8px; }
       label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
       input, select, button {
         width: 100%;
         border: 1px solid var(--line);
         border-radius: 8px;
-        padding: 8px;
+        padding: 9px;
         color: var(--text);
-        background: rgba(7, 13, 25, 0.9);
+        background: rgba(7, 13, 25, 0.92);
       }
       button {
         background: linear-gradient(120deg, #3179ff, #59bbff);
@@ -73,75 +99,99 @@
         border: 0;
         font-weight: 600;
       }
-      .list { margin: 0; padding-left: 18px; max-height: 280px; overflow: auto; }
+      .list { margin: 0; padding-left: 18px; max-height: 350px; overflow: auto; }
       .status { min-height: 20px; font-size: 12px; color: #8ec9ff; }
-      .split { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+      .systems-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; }
+      .mini-box {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        background: rgba(7, 14, 25, 0.7);
+      }
       @media (max-width: 1100px) {
-        .main, .lower, .market-layout, .actions, .split { grid-template-columns: 1fr; }
+        .market-layout, .split, .systems-grid { grid-template-columns: 1fr; }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <div class="headline">
+      <div class="topbar">
         <div>
-          <h1>World Finance Simulator — Moonshot V11</h1>
-          <div class="muted">Realtime simulation keeps evolving on the server even when users are offline. Reconnect anytime for the latest state.</div>
+          <h1>World Finance Simulator — Market OS</h1>
+          <div class="muted">Realtime global market simulation with clean structured views.</div>
         </div>
-        <div class="muted" id="clock">--</div>
+        <div class="pill" id="clock">--</div>
       </div>
 
       <div class="grid stats">
         <div class="card"><div class="stat-label">GLOBAL100</div><div id="indexValue" class="stat-value">--</div></div>
+        <div class="card"><div class="stat-label">Player Capital (Limit)</div><div id="playerCapital" class="stat-value">--</div></div>
         <div class="card"><div class="stat-label">GDP Growth</div><div id="gdp" class="stat-value">--</div></div>
         <div class="card"><div class="stat-label">Inflation</div><div id="inflation" class="stat-value">--</div></div>
         <div class="card"><div class="stat-label">Unemployment</div><div id="unemployment" class="stat-value">--</div></div>
         <div class="card"><div class="stat-label">Geo Tension</div><div id="tension" class="stat-value">--</div></div>
-        <div class="card"><div class="stat-label">Supply Pressure</div><div id="supply" class="stat-value">--</div></div>
       </div>
 
-      <div class="grid main">
+      <div class="nav">
+        <button data-page="markets" class="active">Markets</button>
+        <button data-page="companies">Companies</button>
+        <button data-page="world">World</button>
+      </div>
+
+      <section id="page-markets" class="page active">
         <div class="card">
           <h3>Global Stock Market</h3>
           <div class="market-layout">
             <div>
-              <canvas id="chart" width="900" height="280"></canvas>
-              <div class="muted" id="selectedStockMeta">Select a stock from the table to inspect candles and trade flow.</div>
+              <canvas id="chart" width="1200" height="420"></canvas>
+              <div class="muted" id="selectedStockMeta">Select a stock from the table to inspect candlesticks.</div>
             </div>
             <div>
-              <h3>Trade Stocks</h3>
+              <h3>Place Order</h3>
               <div class="form-group"><label>Company</label><select id="tradeCompany"></select></div>
               <div class="split">
                 <div class="form-group"><label>Side</label><select id="tradeSide"><option value="buy">Buy</option><option value="sell">Sell</option></select></div>
-                <div class="form-group"><label>Quantity</label><input id="tradeQty" type="number" value="100" min="1" /></div>
+                <div class="form-group"><label>Type</label><select id="tradeType"><option value="limit">Limit</option><option value="market">Market</option></select></div>
               </div>
-              <div class="form-group"><label>Price</label><input id="tradePrice" type="number" step="0.0001" /></div>
+              <div class="form-group"><label>Quantity</label><input id="tradeQty" type="number" value="100" min="1" /></div>
+              <div class="form-group" id="priceGroup"><label>Limit Price</label><input id="tradePrice" type="number" step="0.0001" /></div>
               <button id="tradeBtn">Submit Order</button>
               <div class="status" id="tradeStatus"></div>
             </div>
           </div>
           <table>
             <thead>
-              <tr><th>Ticker</th><th>Company</th><th>Price</th><th>Market Cap</th><th>P/E</th><th>Volume</th><th>Order Depth</th><th>Status</th></tr>
+              <tr><th>Ticker</th><th>Company</th><th>Price</th><th>Market Cap</th><th>P/E</th><th>Volume</th><th>Depth</th><th>Status</th></tr>
             </thead>
             <tbody id="stocks"></tbody>
           </table>
         </div>
+      </section>
 
-        <div class="grid">
-          <div class="card">
-            <h3>Create Company</h3>
-            <div class="form-group"><label>Company Name</label><input id="name" value="Aether Dynamics" /></div>
-            <div class="split">
-              <div class="form-group"><label>Country</label><input id="country" value="USA" /></div>
-              <div class="form-group"><label>Sector</label><input id="sector" value="AI" /></div>
+      <section id="page-companies" class="page">
+        <div class="split">
+          <div class="stack">
+            <div class="card">
+              <h3>Create Company</h3>
+              <div class="form-group"><label>Company Name</label><input id="name" value="Aether Dynamics" /></div>
+              <div class="split">
+                <div class="form-group"><label>Country</label><input id="country" value="USA" /></div>
+                <div class="form-group"><label>Sector</label><input id="sector" value="AI" /></div>
+              </div>
+              <div class="split">
+                <div class="form-group"><label>Business Model</label><input id="model" value="SaaS" /></div>
+                <div class="form-group"><label>Initial Valuation</label><input id="valuation" type="number" value="800000000" /></div>
+              </div>
+              <button id="createBtn">Create Company</button>
+              <div class="status" id="createStatus"></div>
             </div>
-            <div class="split">
-              <div class="form-group"><label>Business Model</label><input id="model" value="SaaS" /></div>
-              <div class="form-group"><label>Initial Valuation</label><input id="valuation" type="number" value="800000000" /></div>
+            <div class="card">
+              <h3>Leaderboards</h3>
+              <div class="muted">Top Companies</div>
+              <ol class="list" id="topCompanies"></ol>
+              <div class="muted">Richest Agents</div>
+              <ol class="list" id="richest"></ol>
             </div>
-            <button id="createBtn">Create Company</button>
-            <div class="status" id="createStatus"></div>
           </div>
 
           <div class="card">
@@ -161,7 +211,7 @@
               </select>
             </div>
             <div class="form-group"><label>Company</label><select id="actionCompany"></select></div>
-            <div class="actions">
+            <div class="split">
               <div class="form-group"><label>Buyer (M&A)</label><select id="buyerCompany"></select></div>
               <div class="form-group"><label>Target (M&A)</label><select id="targetCompany"></select></div>
               <div class="form-group"><label>Country</label><input id="actionCountry" placeholder="USA / China / ..." /></div>
@@ -173,29 +223,26 @@
             <div class="status" id="actionStatus"></div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="grid lower">
-        <div class="card">
-          <h3>News, Media & Rankings</h3>
-          <div class="split">
-            <div>
-              <div class="muted">Headlines</div>
-              <ul class="list" id="headlines"></ul>
+      <section id="page-world" class="page">
+        <div class="systems-grid">
+          <div class="card">
+            <h3>News & Media Stream</h3>
+            <ul class="list" id="headlines"></ul>
+          </div>
+          <div class="stack">
+            <div class="card">
+              <h3>World Systems</h3>
+              <div id="systems" class="muted">Loading...</div>
             </div>
-            <div>
-              <div class="muted">Top Companies</div>
-              <ol class="list" id="topCompanies"></ol>
-              <div class="muted">Richest Agents</div>
-              <ol class="list" id="richest"></ol>
+            <div class="card">
+              <h3>Global Trade Visualization</h3>
+              <div id="tradeRoutes" class="muted">Loading routes...</div>
             </div>
           </div>
         </div>
-        <div class="card">
-          <h3>World Systems</h3>
-          <div id="systems" class="muted">Loading...</div>
-        </div>
-      </div>
+      </section>
     </div>
 
     <script>
@@ -207,6 +254,11 @@
         return Number(v ?? 0).toLocaleString(undefined, { maximumFractionDigits: d });
       }
 
+      function setStatus(el, message, error = false) {
+        el.textContent = message;
+        el.style.color = error ? "#ff8fa9" : "#8ec9ff";
+      }
+
       async function post(url, payload) {
         const response = await fetch(url, {
           method: "POST",
@@ -216,11 +268,6 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.error ?? "Request failed");
         return data;
-      }
-
-      function setStatus(el, message, error = false) {
-        el.textContent = message;
-        el.style.color = error ? "#ff8fa9" : "#8ec9ff";
       }
 
       function populateCompanySelects(companies, keepId) {
@@ -239,21 +286,21 @@
         const w = canvas.width;
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = "rgba(5,10,20,0.9)";
+        ctx.fillStyle = "rgba(5,10,20,0.92)";
         ctx.fillRect(0, 0, w, h);
         if (!stock?.candles?.length) return;
 
-        const candles = stock.candles.slice(-60);
+        const candles = stock.candles.slice(-80);
         const prices = candles.flatMap((c) => [c.low, c.high]);
         const min = Math.min(...prices);
         const max = Math.max(...prices);
         const range = Math.max(0.0001, max - min);
-        const candleW = Math.max(4, (w - 40) / candles.length - 2);
-        const toY = (price) => 15 + ((max - price) / range) * (h - 30);
+        const candleW = Math.max(5, (w - 70) / candles.length - 2);
+        const toY = (price) => 24 + ((max - price) / range) * (h - 48);
 
-        ctx.strokeStyle = "rgba(95,130,190,0.4)";
-        for (let i = 0; i < 5; i += 1) {
-          const y = 15 + (h - 30) * (i / 4);
+        ctx.strokeStyle = "rgba(95,130,190,0.35)";
+        for (let i = 0; i < 6; i += 1) {
+          const y = 24 + (h - 48) * (i / 5);
           ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(w, y);
@@ -261,7 +308,7 @@
         }
 
         candles.forEach((candle, i) => {
-          const x = 20 + i * (candleW + 2);
+          const x = 35 + i * (candleW + 2);
           const openY = toY(candle.open);
           const closeY = toY(candle.close);
           const highY = toY(candle.high);
@@ -269,6 +316,7 @@
           const up = candle.close >= candle.open;
 
           ctx.strokeStyle = up ? "#45f6b0" : "#ff7f9c";
+          ctx.lineWidth = 1.4;
           ctx.beginPath();
           ctx.moveTo(x + candleW / 2, highY);
           ctx.lineTo(x + candleW / 2, lowY);
@@ -276,30 +324,44 @@
 
           ctx.fillStyle = up ? "#45f6b0" : "#ff7f9c";
           const bodyY = Math.min(openY, closeY);
-          const bodyH = Math.max(2, Math.abs(closeY - openY));
+          const bodyH = Math.max(3, Math.abs(closeY - openY));
           ctx.fillRect(x, bodyY, candleW, bodyH);
         });
+      }
+
+      function switchPage(page) {
+        document.querySelectorAll(".page").forEach((el) => el.classList.remove("active"));
+        document.querySelectorAll(".nav button").forEach((el) => el.classList.remove("active"));
+        const pageEl = document.getElementById(`page-${page}`);
+        if (pageEl) pageEl.classList.add("active");
+        const navBtn = document.querySelector(`.nav button[data-page=\"${page}\"]`);
+        if (navBtn) navBtn.classList.add("active");
       }
 
       function render(state) {
         latestState = state;
         $("clock").textContent = `Tick ${state.tick} · ${new Date(state.time).toLocaleString()}`;
         $("indexValue").innerHTML = `${n(state.indexes.GLOBAL100.value)} <span class="${state.indexes.GLOBAL100.changePct >= 0 ? "up" : "down"}">${n(state.indexes.GLOBAL100.changePct)}%</span>`;
+        $("playerCapital").textContent = `$${n(state.player.cash ?? state.player.netWorth)}`;
         $("gdp").textContent = `${n(state.macro.gdpGrowth * 100)}%`;
         $("inflation").textContent = `${n(state.macro.inflation * 100)}%`;
         $("unemployment").textContent = `${n(state.macro.unemployment * 100)}%`;
         $("tension").textContent = `${n(state.geopolitics.tension * 100)}%`;
-        $("supply").textContent = `${n(state.supplyChains.pressure * 100)}%`;
+
         $("systems").innerHTML = `
           Sentiment: ${n(state.sentiment * 100)}%<br>
           Policy pressure: ${n(state.policyPressure * 100)}%<br>
           Consumer confidence: ${n(state.population.consumerConfidence * 100)}%<br>
+          Supply pressure: ${n(state.supplyChains.pressure * 100)}%<br>
           Institutional AUM: ${n(state.funds.institutionalAUM)}<br>
           Hedge AUM: ${n(state.funds.hedgeAUM)}<br>
           Retail liquidity: ${n(state.funds.retailLiquidity)}<br>
-          Active conflicts: ${(state.geopolitics.activeConflicts || []).join(", ") || "None"}<br>
-          Treaties: ${(state.geopolitics.treaties || []).slice(0, 3).join(", ") || "None"}
+          Active conflicts: ${(state.geopolitics.activeConflicts || []).join(", ") || "None"}
         `;
+
+        $("tradeRoutes").innerHTML = Object.entries(state.supplyChains.regions || {}).map(([key, region]) => `
+          <div class="mini-box"><strong>${key}</strong><br>Resource: ${region.resource} · Sensitivity: ${n(region.sensitivity * 100)}% · Disruption: ${n((region.disruption || 0) * 100)}%</div>
+        `).join("");
 
         const stocks = state.stocks.slice().sort((a, b) => b.marketCap - a.marketCap);
         $("stocks").innerHTML = stocks.map((s) => `
@@ -341,6 +403,15 @@
         });
       }
 
+      document.querySelectorAll(".nav button").forEach((button) => {
+        button.addEventListener("click", () => switchPage(button.dataset.page));
+      });
+
+      $("tradeType").addEventListener("change", () => {
+        const market = $("tradeType").value === "market";
+        $("priceGroup").style.display = market ? "none" : "block";
+      });
+
       $("createBtn").addEventListener("click", async () => {
         try {
           const company = await post("/api/company", {
@@ -359,14 +430,16 @@
 
       $("tradeBtn").addEventListener("click", async () => {
         try {
+          const orderType = $("tradeType").value;
           await post("/api/order", {
             companyId: $("tradeCompany").value,
             side: $("tradeSide").value,
+            orderType,
             quantity: Number($("tradeQty").value || 0),
-            price: Number($("tradePrice").value || 0),
+            price: orderType === "market" ? undefined : Number($("tradePrice").value || 0),
             traderId: "player"
           });
-          setStatus($("tradeStatus"), "Order accepted and matched against order book if possible.");
+          setStatus($("tradeStatus"), `${orderType === "market" ? "Market" : "Limit"} order accepted.`);
         } catch (error) {
           setStatus($("tradeStatus"), error.message, true);
         }

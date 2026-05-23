@@ -58,7 +58,8 @@ export function createInitialState({ seed = 42 } = {}) {
     },
     player: {
       role: "startup founder",
-      netWorth: 5_000_000,
+      cash: 50_000_000_000,
+      netWorth: 50_000_000_000,
       influence: 0.1,
       rank: 0
     },
