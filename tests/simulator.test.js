@@ -200,6 +200,27 @@ test("player orders enforce cash and position constraints", () => {
   );
 });
 
+test("new listings expose public float for immediate player trading", () => {
+  const state = createInitialState({ seed: 92 });
+  upsertCompany(state, createCompany({ id: "flt", name: "Float Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  assert.equal(state.companies.flt.ownership.principalStakePct, 62);
+  assert.equal(state.companies.flt.ownership.publicFloatPct, 38);
+  assert.equal(state.stocks.flt.publicFloatShares, 38_000_000);
+
+  const startCash = state.player.cash;
+  const buyTrades = placeOrder(state, { companyId: "flt", side: "buy", orderType: "market", quantity: 100, traderId: "player" });
+  assert.ok(buyTrades.length >= 1);
+  assert.equal(state.player.holdings.flt, 100);
+  assert.ok(state.player.cash < startCash);
+
+  const afterBuyCash = state.player.cash;
+  const sellTrades = placeOrder(state, { companyId: "flt", side: "sell", orderType: "market", quantity: 40, traderId: "player" });
+  assert.ok(sellTrades.length >= 1);
+  assert.equal(state.player.holdings.flt, 60);
+  assert.ok(state.player.cash > afterBuyCash);
+});
+
 test("trade size affects execution impact and company valuation", () => {
   const small = createInitialState({ seed: 91 });
   const large = createInitialState({ seed: 91 });

@@ -78,7 +78,7 @@ export function createInitialState({ seed = 42 } = {}) {
   };
 }
 
-export function createSeedCompanies(state, count = 8) {
+export function createSeedCompanies(state, count = 12) {
   const rng = createRng(state.seed);
   for (let i = 0; i < count; i += 1) {
     const company = createCompany({
@@ -101,11 +101,16 @@ export function createCompany({
   businessModel,
   initialValuation = 1_000_000_000,
   employees = 5000,
-  rdBudget = 0.12
+  rdBudget = 0.12,
+  principalStakePct = 62
 }) {
   const sharesOutstanding = 100_000_000;
   const initialPrice = Number((initialValuation / sharesOutstanding).toFixed(2));
   const principalHolder = createPrincipalHolderName(name, id);
+  const boundedPrincipalStakePct = Math.min(90, Math.max(10, Number(principalStakePct)));
+  const publicFloatPct = Number((100 - boundedPrincipalStakePct).toFixed(4));
+  const principalShares = Math.round((sharesOutstanding * boundedPrincipalStakePct) / 100);
+  const publicFloatShares = Math.max(1, sharesOutstanding - principalShares);
 
   return {
     id,
@@ -131,11 +136,15 @@ export function createCompany({
     },
     ownership: {
       principalHolder,
-      principalStakePct: 100
+      principalStakePct: boundedPrincipalStakePct,
+      publicFloatPct,
+      principalShares,
+      publicFloatShares
     },
     stock: {
       ticker: createTicker(name, id),
       sharesOutstanding,
+      publicFloatShares,
       lastPrice: initialPrice,
       marketCap: initialValuation,
       peRatio: 18,

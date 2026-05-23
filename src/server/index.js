@@ -9,7 +9,7 @@ const PORT = Number(process.env.PORT || 3000);
 const publicDir = path.resolve(process.cwd(), "src/web");
 
 const state = loadCheckpoint() ?? createInitialState({ seed: 7 });
-if (!Object.keys(state.companies).length) createSeedCompanies(state, 10);
+if (!Object.keys(state.companies).length) createSeedCompanies(state, 16);
 
 const streamClients = new Set();
 
@@ -54,6 +54,7 @@ function getSnapshot() {
       sellPressure: stock.sellPressure,
       support: stock.support,
       resistance: stock.resistance,
+      publicFloatShares: stock.publicFloatShares,
       sharesOutstanding: stock.sharesOutstanding,
       candles: stock.candles.slice(-240),
       buyDepth: state.orderBooks[companyId]?.buy?.length ?? 0,
@@ -80,7 +81,10 @@ function getSnapshot() {
       carbonEmissions: c.carbonEmissions,
       businessModel: c.businessModel,
       principalHolder: c.ownership?.principalHolder ?? null,
-      principalStakePct: c.ownership?.principalStakePct ?? null
+      principalStakePct: c.ownership?.principalStakePct ?? null,
+      publicFloatPct: c.ownership?.publicFloatPct ?? null,
+      principalShares: c.ownership?.principalShares ?? null,
+      publicFloatShares: c.ownership?.publicFloatShares ?? null
     })),
     commodities: Object.fromEntries(
       Object.entries(state.commodities).map(([k, v]) => [k, { price: v.price }])
@@ -163,7 +167,7 @@ const server = http.createServer(async (req, res) => {
     if (req.url === "/api/order" && req.method === "POST") {
       const body = await readBody(req);
       const trades = placeOrder(state, body);
-      return sendJson(res, 201, { trades });
+      return sendJson(res, 201, { trades, player: state.player });
     }
 
     if (req.url === "/api/tick" && req.method === "POST") {

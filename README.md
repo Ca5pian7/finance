@@ -8,6 +8,8 @@ This repository now contains an executable V10 foundation for a realistic global
 - Company creation system (sector/country/business model + core KPIs)
 - Market microstructure
   - Buy/sell order books
+  - Founder/public-float ownership split so new listings are tradeable
+  - Built-in market maker liquidity so buy and sell orders can fill immediately
   - Matching engine
   - Price updates, market cap, volume, PE ratio, short interest, dividend yield
   - Crowd-pressure/stability dynamics with 10,000,000 simulated participants
@@ -34,6 +36,7 @@ This repository now contains an executable V10 foundation for a realistic global
   - Side stock list with per-stock mini graph plus stability/pressure stats
   - Day/night market session cycle where 1 stock day = 5 real minutes
   - Stock trade form supporting both limit and market orders
+  - Wallet cash updates immediately after player trades
 - Automated tests for determinism, matching behavior, bounded indicators, event coupling, and mergers
 
 ## Project Structure

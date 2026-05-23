@@ -2,7 +2,7 @@ import { createInitialState, createSeedCompanies } from "../simulator/state.js";
 import { runTick } from "../simulator/engine.js";
 
 const state = createInitialState({ seed: 99 });
-createSeedCompanies(state, 5);
+createSeedCompanies(state, 8);
 
 for (let i = 0; i < 120; i += 1) {
   runTick(state, {
