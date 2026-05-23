@@ -131,7 +131,7 @@ test("market session advances with day/night cycle and 10M participant populatio
   assert.equal(state.marketSession.phase, "day");
   assert.equal(state.marketSession.dayNumber, 1);
 
-  for (let i = 0; i < 149; i += 1) runTick(state);
+  for (let i = 0; i < 150; i += 1) runTick(state);
   assert.equal(state.marketSession.phase, "night");
 
   for (let i = 0; i < 150; i += 1) runTick(state);
