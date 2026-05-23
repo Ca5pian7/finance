@@ -200,13 +200,33 @@ test("player orders enforce cash and position constraints", () => {
   );
 });
 
-test("richest leaderboard includes top 25 entries with player net worth", () => {
+test("trade size affects execution impact and company valuation", () => {
+  const small = createInitialState({ seed: 91 });
+  const large = createInitialState({ seed: 91 });
+  upsertCompany(small, createCompany({ id: "imp", name: "Impact Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));
+  upsertCompany(large, createCompany({ id: "imp", name: "Impact Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  placeOrder(small, { companyId: "imp", side: "sell", orderType: "limit", price: 10, quantity: 5_000_000, traderId: "maker" });
+  placeOrder(large, { companyId: "imp", side: "sell", orderType: "limit", price: 10, quantity: 5_000_000, traderId: "maker" });
+
+  const smallBefore = small.companies.imp.valuation;
+  const largeBefore = large.companies.imp.valuation;
+  placeOrder(small, { companyId: "imp", side: "buy", orderType: "limit", price: 10.2, quantity: 1_000, traderId: "player" });
+  placeOrder(large, { companyId: "imp", side: "buy", orderType: "limit", price: 10.2, quantity: 5_000_000, traderId: "player" });
+
+  assert.ok(large.stocks.imp.lastPrice > small.stocks.imp.lastPrice);
+  assert.ok(large.companies.imp.valuation - largeBefore > small.companies.imp.valuation - smallBefore);
+});
+
+test("richest leaderboard includes billionaires with company stake", () => {
   const state = createInitialState({ seed: 90 });
   upsertCompany(state, createCompany({ id: "rx", name: "Rank Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));
 
   runTick(state);
 
-  assert.equal(state.leaderboards.richest.length, 25);
+  assert.ok(state.leaderboards.richest.length >= 1 && state.leaderboards.richest.length <= 25);
   assert.ok(state.leaderboards.richest.every((entry) => Number.isFinite(entry.netWorth ?? entry.wealth)));
+  assert.ok(state.leaderboards.richest.every((entry) => Number(entry.netWorth ?? entry.wealth) >= 1_000_000_000));
+  assert.ok(state.leaderboards.richest.every((entry) => Number.isFinite(Number(entry.stakePct ?? 0))));
   assert.ok(state.leaderboards.richest.some((entry) => entry.id === "player"));
 });

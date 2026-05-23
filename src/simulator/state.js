@@ -105,6 +105,7 @@ export function createCompany({
 }) {
   const sharesOutstanding = 100_000_000;
   const initialPrice = Number((initialValuation / sharesOutstanding).toFixed(2));
+  const principalHolder = createPrincipalHolderName(name, id);
 
   return {
     id,
@@ -128,6 +129,10 @@ export function createCompany({
       growth: 0.03,
       debtRatio: 0.22
     },
+    ownership: {
+      principalHolder,
+      principalStakePct: 100
+    },
     stock: {
       ticker: createTicker(name, id),
       sharesOutstanding,
@@ -149,6 +154,15 @@ export function createCompany({
       candles: []
     }
   };
+}
+
+function createPrincipalHolderName(name, fallback) {
+  const cleaned = String(name ?? "").trim();
+  if (cleaned) {
+    const firstWord = cleaned.split(/\s+/)[0];
+    return `${firstWord} Founder`;
+  }
+  return `${fallback} Founder`;
 }
 
 export function createTicker(name, fallback) {

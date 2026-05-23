@@ -32,6 +32,11 @@ function getPlayerHoldingShares(state, companyId) {
   return Number(state.player?.holdings?.[companyId] ?? 0);
 }
 
+function getStakePctForShares(stock, shares) {
+  const outstanding = Math.max(1, Number(stock?.sharesOutstanding ?? 0));
+  return bounded((Number(shares) / outstanding) * 100, 0, 100);
+}
+
 function settlePlayerTrade(state, companyId, side, quantity, price) {
   if (!state.player) return;
   if (!state.player.holdings) state.player.holdings = {};
@@ -54,8 +59,10 @@ export function placeOrder(state, order) {
   const book = state.orderBooks[order.companyId];
   if (!book) throw new Error("Unknown company");
   if (!["buy", "sell"].includes(order.side)) throw new Error("Invalid side");
-  if (order.quantity <= 0) throw new Error("Invalid order quantity");
+  const quantity = Number(order.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Invalid order quantity");
   const stock = state.stocks[order.companyId];
+  if (quantity > stock.sharesOutstanding) throw new Error("Order exceeds available company shares");
   const orderType = order.orderType === "market" ? "market" : "limit";
   let price = Number(order.price);
   if (orderType === "market") {
@@ -64,12 +71,14 @@ export function placeOrder(state, order) {
   }
   if (!Number.isFinite(price) || price <= 0) throw new Error("Invalid order price");
   if (order.traderId === "player") {
-    const qty = Number(order.quantity);
-    const estimatedNotional = qty * price;
+    const estimatedNotional = quantity * price;
     if (order.side === "buy" && estimatedNotional > (state.player?.cash ?? 0)) {
       throw new Error("Insufficient cash balance");
     }
-    if (order.side === "sell" && qty > getPlayerHoldingShares(state, order.companyId)) {
+    if (order.side === "buy" && getPlayerHoldingShares(state, order.companyId) + quantity > stock.sharesOutstanding) {
+      throw new Error("Insufficient company shares available");
+    }
+    if (order.side === "sell" && quantity > getPlayerHoldingShares(state, order.companyId)) {
       throw new Error("Insufficient shares to sell");
     }
   }
@@ -79,7 +88,7 @@ export function placeOrder(state, order) {
     side: order.side,
     price,
     orderType,
-    quantity: Number(order.quantity),
+    quantity,
     timestamp: Date.now()
   });
   return matchOrderBook(state, order.companyId);
@@ -88,6 +97,7 @@ export function placeOrder(state, order) {
 export function matchOrderBook(state, companyId) {
   const book = state.orderBooks[companyId];
   const stock = state.stocks[companyId];
+  const company = state.companies[companyId];
   const trades = [];
 
   book.buy.sort((a, b) => b.price - a.price || a.timestamp - b.timestamp);
@@ -98,11 +108,15 @@ export function matchOrderBook(state, companyId) {
     const ask = book.sell[0];
     const quantity = Math.min(bid.quantity, ask.quantity);
     const rawPrice = (bid.price + ask.price) / 2;
+    const participation = bounded(quantity / Math.max(1, stock.sharesOutstanding), 0, 1);
+    const impactPct = Math.min(0.08, Math.sqrt(participation) * 0.25);
+    const buyInitiated = bid.timestamp >= ask.timestamp;
+    const impactedPrice = rawPrice * (1 + (buyInitiated ? impactPct : -impactPct));
 
     const breakerLimit = 0.1;
     const maxUp = stock.lastPrice * (1 + breakerLimit);
     const maxDown = stock.lastPrice * (1 - breakerLimit);
-    const tradePrice = bounded(rawPrice, maxDown, maxUp);
+    const tradePrice = bounded(impactedPrice, maxDown, maxUp);
 
     bid.quantity -= quantity;
     ask.quantity -= quantity;
@@ -113,6 +127,10 @@ export function matchOrderBook(state, companyId) {
     stock.lastPrice = Number(tradePrice.toFixed(4));
     stock.volume += quantity;
     stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
+    if (company) {
+      const valuationBlend = bounded(0.1 + participation * 4, 0.1, 0.5);
+      company.valuation = Number((company.valuation * (1 - valuationBlend) + stock.marketCap * valuationBlend).toFixed(2));
+    }
 
     trades.push({
       companyId,
@@ -424,24 +442,56 @@ function updateLeaderboards(state) {
   }, 0);
   state.player.netWorth = Math.max(500_000, Math.round((state.player.cash ?? 0) + holdingsValue));
 
-  const richestPool = [
-    ...state.population.agents.map((agent) => ({
-      id: agent.id,
-      name: agent.id,
-      type: agent.type,
-      wealth: agent.wealth,
-      netWorth: agent.wealth
-    })),
-    {
-      id: "player",
-      name: "You",
-      type: "player",
-      wealth: state.player.netWorth,
-      netWorth: state.player.netWorth
+  const billionaireFloor = 1_000_000_000;
+  const founderEntries = Object.values(state.companies).map((company) => {
+    const stock = state.stocks[company.id];
+    const playerShares = getPlayerHoldingShares(state, company.id);
+    const playerStakePct = getStakePctForShares(stock, playerShares);
+    const founderStakePct = Number((100 - playerStakePct).toFixed(4));
+    const founderNetWorth = Number((company.valuation * (founderStakePct / 100)).toFixed(2));
+    return {
+      id: `founder-${company.id}`,
+      name: company.ownership?.principalHolder ?? `${company.name} Founder`,
+      type: "founder",
+      companyId: company.id,
+      companyName: company.name,
+      stakePct: founderStakePct,
+      wealth: founderNetWorth,
+      netWorth: founderNetWorth
+    };
+  });
+
+  let playerCompanyStake = null;
+  for (const [companyId, qty] of Object.entries(holdings)) {
+    const stock = state.stocks[companyId];
+    if (!stock) continue;
+    const stakePct = getStakePctForShares(stock, qty);
+    if (!playerCompanyStake || stakePct > playerCompanyStake.stakePct) {
+      playerCompanyStake = {
+        companyId,
+        companyName: state.companies[companyId]?.name ?? companyId,
+        stakePct: Number(stakePct.toFixed(4))
+      };
     }
-  ];
-  state.leaderboards.richest = richestPool.sort((a, b) => b.wealth - a.wealth).slice(0, 25);
-  state.player.rank = richestPool.filter((entry) => entry.wealth > state.player.netWorth).length + 1;
+  }
+
+  const playerEntry = {
+    id: "player",
+    name: "You",
+    type: "player",
+    companyId: playerCompanyStake?.companyId ?? null,
+    companyName: playerCompanyStake?.companyName ?? null,
+    stakePct: playerCompanyStake?.stakePct ?? 0,
+    wealth: state.player.netWorth,
+    netWorth: state.player.netWorth
+  };
+
+  const richestPool = [...founderEntries, playerEntry]
+    .filter((entry) => entry.netWorth >= billionaireFloor)
+    .sort((a, b) => b.netWorth - a.netWorth);
+
+  state.leaderboards.richest = richestPool.slice(0, 25);
+  state.player.rank = richestPool.filter((entry) => entry.netWorth > state.player.netWorth).length + 1;
 }
 
 function requireCompany(state, companyId) {
