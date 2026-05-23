@@ -27,14 +27,23 @@ export function placeOrder(state, order) {
   const book = state.orderBooks[order.companyId];
   if (!book) throw new Error("Unknown company");
   if (!["buy", "sell"].includes(order.side)) throw new Error("Invalid side");
-  if (order.quantity <= 0 || order.price <= 0) throw new Error("Invalid order values");
+  if (order.quantity <= 0) throw new Error("Invalid order quantity");
   if (!state.stocks[order.companyId].listed) throw new Error("Security delisted");
   if (state.stocks[order.companyId].halted) throw new Error("Trading halted");
+  const stock = state.stocks[order.companyId];
+  const orderType = order.orderType === "market" ? "market" : "limit";
+  let price = Number(order.price);
+  if (orderType === "market") {
+    const aggressive = order.side === "buy" ? 1.5 : 0.5;
+    price = Number(Math.max(0.0001, stock.lastPrice * aggressive).toFixed(4));
+  }
+  if (!Number.isFinite(price) || price <= 0) throw new Error("Invalid order price");
   book[order.side].push({
     id: `${state.tick}-${book[order.side].length + 1}-${order.side}`,
     traderId: order.traderId ?? "system",
     side: order.side,
-    price: Number(order.price),
+    price,
+    orderType,
     quantity: Number(order.quantity),
     timestamp: Date.now()
   });
@@ -202,14 +211,26 @@ function updateCompany(state, companyId, rng) {
   company.aiCapability = bounded(company.aiCapability + company.rdBudget * 0.008, 0, 1);
   company.valuation = Number(Math.max(1_000_000, company.valuation * (1 + company.kpis.growth * 0.03 + company.kpis.profitMargin * 0.01)).toFixed(2));
 
-  const fundamentalReturn = company.kpis.growth * 0.12 + company.kpis.profitMargin * 0.03 + (company.innovation - 0.5) * 0.05;
-  const macroReturn = state.sentiment * 0.08 - state.macro.rate * 0.2 - state.macro.inflation * 0.1;
-  const random = (rng() - 0.5) * 0.02;
-  const nextPrice = Math.max(0.1, stock.lastPrice * (1 + fundamentalReturn + macroReturn + random));
-
-  const maxMove = 0.1;
+  const intrinsicPrice = Math.max(0.1, company.valuation / stock.sharesOutstanding);
+  const valuationGap = (intrinsicPrice - stock.lastPrice) / Math.max(0.1, stock.lastPrice);
+  const fundamentalReturn =
+    company.kpis.growth * 0.05 +
+    company.kpis.profitMargin * 0.02 +
+    (company.innovation - 0.5) * 0.025 +
+    (company.reputation - 0.5) * 0.015;
+  const macroReturn =
+    state.sentiment * 0.03 -
+    state.macro.rate * 0.06 -
+    state.macro.inflation * 0.05 -
+    state.geopolitics.tension * 0.015 -
+    state.supplyChains.pressure * 0.012;
+  const meanReversion = valuationGap * 0.08;
+  const random = (rng() - 0.5) * 0.008;
+  const baseReturn = fundamentalReturn + macroReturn + meanReversion + random;
+  const maxMove = bounded(0.015 + state.geopolitics.tension * 0.015 + state.supplyChains.pressure * 0.01, 0.015, 0.05);
+  const nextPrice = Math.max(0.1, stock.lastPrice * (1 + bounded(baseReturn, -maxMove * 1.5, maxMove * 1.5)));
   const clamped = bounded(nextPrice, stock.lastPrice * (1 - maxMove), stock.lastPrice * (1 + maxMove));
-  stock.halted = Math.abs((clamped - stock.lastPrice) / stock.lastPrice) >= 0.0999;
+  stock.halted = Math.abs((clamped - stock.lastPrice) / stock.lastPrice) >= 0.045;
   stock.lastPrice = Number(clamped.toFixed(4));
   stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
   stock.peRatio = Number((Math.max(1, stock.marketCap / Math.max(1, company.kpis.revenue * company.kpis.profitMargin))).toFixed(2));
@@ -288,7 +309,8 @@ function updateLeaderboards(state) {
   const listedWorth = Object.values(state.stocks)
     .filter((s) => s.listed)
     .reduce((sum, s) => sum + s.marketCap * 0.000001, 0);
-  state.player.netWorth = Math.max(500_000, Math.round(5_000_000 + listedWorth * (0.002 + state.player.influence * 0.001)));
+  const cap = state.player.cash ?? 50_000_000_000;
+  state.player.netWorth = Math.min(cap, Math.max(500_000, Math.round(cap * 0.95 + listedWorth * (0.0015 + state.player.influence * 0.0008))));
   state.player.rank = state.leaderboards.richest.findIndex((agent) => agent.wealth <= state.player.netWorth) + 1;
 }
 
@@ -415,11 +437,13 @@ function applyGovernmentDrift(state, rng) {
   }
 }
 
-function snapshotCandle(state, companyId, open) {
+function snapshotCandle(state, companyId, open, rng) {
   const stock = state.stocks[companyId];
   const close = stock.lastPrice;
-  const high = Math.max(open, close);
-  const low = Math.min(open, close);
+  const spread = Math.max(0.0001, Math.abs(close - open));
+  const wick = spread * (0.35 + rng() * 0.65);
+  const high = Number((Math.max(open, close) + wick).toFixed(4));
+  const low = Number(Math.max(0.0001, Math.min(open, close) - wick).toFixed(4));
   stock.candles.push({ tick: state.tick, open, high, low, close, volume: stock.volume });
   stock.candles = stock.candles.slice(-300);
 }
@@ -442,7 +466,7 @@ export function runTick(state, { events = [] } = {}) {
     const open = state.stocks[companyId].lastPrice;
     updateCompany(state, companyId, rng);
     matchOrderBook(state, companyId);
-    snapshotCandle(state, companyId, open);
+    snapshotCandle(state, companyId, open, rng);
   }
 
   updatePopulation(state, rng);

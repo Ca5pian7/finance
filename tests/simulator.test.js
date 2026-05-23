@@ -33,16 +33,35 @@ test("order matching executes when bid meets ask", () => {
   assert.equal(state.stocks.c1.volume, 60);
 });
 
+test("market order executes using best available liquidity", () => {
+  const state = createInitialState({ seed: 2 });
+  upsertCompany(state, createCompany({ id: "c1", name: "Market One", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  placeOrder(state, { companyId: "c1", side: "sell", orderType: "limit", price: 10.5, quantity: 40, traderId: "maker" });
+  const trades = placeOrder(state, { companyId: "c1", side: "buy", orderType: "market", quantity: 40, traderId: "taker" });
+
+  assert.equal(trades.length, 1);
+  assert.equal(trades[0].quantity, 40);
+  assert.ok(trades[0].price > 0);
+});
+
 test("prices and macro indicators remain bounded across ticks", () => {
   const state = createInitialState({ seed: 77 });
   upsertCompany(state, createCompany({ id: "c1", name: "Gamma Chip", country: "Taiwan", sector: "Semiconductor", businessModel: "B2B" }));
 
-  for (let i = 0; i < 200; i += 1) runTick(state);
+  let maxMovePct = 0;
+  for (let i = 0; i < 200; i += 1) {
+    const before = state.stocks.c1.lastPrice;
+    runTick(state);
+    const after = state.stocks.c1.lastPrice;
+    maxMovePct = Math.max(maxMovePct, Math.abs((after - before) / before));
+  }
 
   assert.ok(state.stocks.c1.lastPrice > 0);
   assert.ok(state.macro.inflation >= 0.005 && state.macro.inflation <= 0.18);
   assert.ok(state.macro.unemployment >= 0.02 && state.macro.unemployment <= 0.25);
   assert.ok(state.macro.rate >= 0 && state.macro.rate <= 0.15);
+  assert.ok(maxMovePct <= 0.051);
 });
 
 test("geopolitical and supply events affect system pressures", () => {

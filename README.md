@@ -28,7 +28,9 @@ This repository now contains an executable V10 foundation for a realistic global
 - Realtime dashboard delivery
   - HTTP API
   - SSE stream for live state updates
-  - Futuristic glass-style dashboard with macro cards, strategic action console, stock trade form, and candlestick chart view
+  - Futuristic glass-style multi-view dashboard (Markets / Companies / World)
+  - Larger candlestick chart view with cleaner market layout
+  - Stock trade form supporting both limit and market orders
 - Automated tests for determinism, matching behavior, bounded indicators, event coupling, and mergers
 
 ## Project Structure
