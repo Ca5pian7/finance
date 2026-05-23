@@ -10,7 +10,8 @@ This repository now contains an executable V10 foundation for a realistic global
   - Buy/sell order books
   - Matching engine
   - Price updates, market cap, volume, PE ratio, short interest, dividend yield
-  - Circuit-breaker-style clamping, halt flags, listing/delisting lifecycle
+  - Crowd-pressure/stability dynamics with 10,000,000 simulated participants
+  - Continuous listing model (no delisting/halt shutdown state)
 - Macro + supply shock coupling
   - GDP growth, inflation, unemployment, policy rate
   - Commodity prices (oil, silicon, food, copper)
@@ -28,8 +29,10 @@ This repository now contains an executable V10 foundation for a realistic global
 - Realtime dashboard delivery
   - HTTP API
   - SSE stream for live state updates
-  - Futuristic glass-style multi-view dashboard (Markets / Companies / World)
-  - Larger candlestick chart view with cleaner market layout
+  - TradingView-style dashboard with larger chart and cleaner market layout
+  - Top live news ticker (wars, mergers, sanctions, macro headlines)
+  - Side stock list with per-stock mini graph plus stability/pressure stats
+  - Day/night market session cycle where 1 stock day = 5 real minutes
   - Stock trade form supporting both limit and market orders
 - Automated tests for determinism, matching behavior, bounded indicators, event coupling, and mergers
 
