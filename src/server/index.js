@@ -2,7 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
 import { createCompany, createInitialState, createSeedCompanies, upsertCompany } from "../simulator/state.js";
-import { executeMerger, placeOrder, runTick } from "../simulator/engine.js";
+import { executeMerger, executeStrategicAction, placeOrder, runTick } from "../simulator/engine.js";
 import { fastForward, loadCheckpoint, saveCheckpoint } from "../simulator/persistence.js";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -40,6 +40,7 @@ function getSnapshot() {
     player: state.player,
     stocks: Object.entries(state.stocks).map(([companyId, stock]) => ({
       companyId,
+      companyName: state.companies[companyId]?.name ?? companyId,
       ticker: stock.ticker,
       lastPrice: stock.lastPrice,
       marketCap: stock.marketCap,
@@ -49,7 +50,9 @@ function getSnapshot() {
       listed: stock.listed,
       volume: stock.volume,
       halted: stock.halted,
-      candles: stock.candles.slice(-50)
+      candles: stock.candles.slice(-80),
+      buyDepth: state.orderBooks[companyId]?.buy?.length ?? 0,
+      sellDepth: state.orderBooks[companyId]?.sell?.length ?? 0
     })),
     companies: Object.values(state.companies).map((c) => ({
       id: c.id,
@@ -153,6 +156,12 @@ const server = http.createServer(async (req, res) => {
     if (req.url === "/api/merge" && req.method === "POST") {
       const body = await readBody(req);
       const outcome = executeMerger(state, { buyerId: body.buyerId, targetId: body.targetId });
+      return sendJson(res, 200, outcome);
+    }
+
+    if (req.url === "/api/action" && req.method === "POST") {
+      const body = await readBody(req);
+      const outcome = executeStrategicAction(state, body);
       return sendJson(res, 200, outcome);
     }
 

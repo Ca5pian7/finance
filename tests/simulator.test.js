@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { executeMerger, placeOrder, runTick } from "../src/simulator/engine.js";
+import { executeMerger, executeStrategicAction, placeOrder, runTick } from "../src/simulator/engine.js";
 import { createCompany, createInitialState, upsertCompany } from "../src/simulator/state.js";
 
 test("simulation is deterministic for same seed and event sequence", () => {
@@ -67,4 +67,38 @@ test("merger delists target and boosts buyer valuation", () => {
   assert.equal(result.targetDelisted, true);
   assert.equal(state.stocks.target.listed, false);
   assert.ok(state.companies.buyer.valuation > before);
+});
+
+test("strategic action can raise venture capital and improve company capacity", () => {
+  const state = createInitialState({ seed: 22 });
+  upsertCompany(
+    state,
+    createCompany({ id: "vc", name: "Helio Labs", country: "USA", sector: "AI", businessModel: "SaaS", initialValuation: 1_000_000_000 })
+  );
+  const beforeValuation = state.companies.vc.valuation;
+  const beforeBudget = state.companies.vc.rdBudget;
+
+  const result = executeStrategicAction(state, { actionType: "RAISE_VENTURE_CAPITAL", companyId: "vc", amount: 300_000_000, intensity: 1.5 });
+
+  assert.equal(result.status, "ok");
+  assert.ok(state.companies.vc.valuation > beforeValuation);
+  assert.ok(state.companies.vc.rdBudget > beforeBudget);
+});
+
+test("strategic action can trigger economic war conditions", () => {
+  const state = createInitialState({ seed: 31 });
+  upsertCompany(state, createCompany({ id: "w1", name: "Trade Apex", country: "USA", sector: "Logistics", businessModel: "B2B" }));
+  const beforeTension = state.geopolitics.tension;
+
+  const result = executeStrategicAction(state, {
+    actionType: "TRIGGER_ECONOMIC_WAR",
+    companyId: "w1",
+    region: "Pacific Corridor",
+    country: "China"
+  });
+
+  assert.equal(result.status, "ok");
+  assert.ok(state.geopolitics.tension > beforeTension);
+  assert.ok(state.geopolitics.activeConflicts.includes("Pacific Corridor"));
+  assert.ok(state.headlines.some((h) => /Economic war escalates|Conflict escalation/i.test(h.headline)));
 });

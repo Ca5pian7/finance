@@ -28,7 +28,7 @@ This repository now contains an executable V10 foundation for a realistic global
 - Realtime dashboard delivery
   - HTTP API
   - SSE stream for live state updates
-  - Dark-themed browser dashboard with macro, systems, index/funds, stocks, and rankings
+  - Futuristic glass-style dashboard with macro cards, strategic action console, stock trade form, and candlestick chart view
 - Automated tests for determinism, matching behavior, bounded indicators, event coupling, and mergers
 
 ## Project Structure
@@ -90,6 +90,7 @@ npm run simulate
 - `POST /api/order` — place order
 - `POST /api/tick` — run one tick with optional events
 - `POST /api/fast-forward` — run multiple ticks quickly
+- `POST /api/action` — execute strategic actions (product launch, market manipulation, acquisitions, VC raise, factories, logistics, policy influence, monopolies, economic war)
 
 Example event payload for `/api/tick`:
 
