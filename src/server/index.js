@@ -78,7 +78,9 @@ function getSnapshot() {
       supplyRisk: c.supplyRisk,
       rdBudget: c.rdBudget,
       carbonEmissions: c.carbonEmissions,
-      businessModel: c.businessModel
+      businessModel: c.businessModel,
+      principalHolder: c.ownership?.principalHolder ?? null,
+      principalStakePct: c.ownership?.principalStakePct ?? null
     })),
     commodities: Object.fromEntries(
       Object.entries(state.commodities).map(([k, v]) => [k, { price: v.price }])
