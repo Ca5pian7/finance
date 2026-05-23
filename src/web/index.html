@@ -3,114 +3,403 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>World Finance Simulator MVP</title>
+    <title>World Finance Simulator | Moonshot Dashboard</title>
     <style>
-      :root { color-scheme: dark; }
-      body { font-family: Inter, Arial, sans-serif; margin: 0; background: #090d14; color: #f4f7ff; }
-      .wrap { padding: 20px; max-width: 1200px; margin: auto; }
-      .card { background: #121a2b; border: 1px solid #273149; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-      .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-      table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #273149; }
-      .ticker { color: #88d6ff; font-weight: 700; }
-      .up { color: #69f0ae; }
-      .down { color: #ff8a8a; }
-      .muted { color: #a3aec6; }
-      button { background: #2e69ff; color: white; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
-      input, select { background: #0e1523; color: #f4f7ff; border: 1px solid #273149; border-radius: 6px; padding: 8px; width: 100%; }
+      :root {
+        color-scheme: dark;
+        --bg: #060a14;
+        --card: rgba(14, 22, 38, 0.8);
+        --line: rgba(143, 164, 207, 0.25);
+        --text: #edf2ff;
+        --muted: #a0acc5;
+        --up: #45f6b0;
+        --down: #ff7f9c;
+        --accent: #5ea8ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at 20% 0%, #1a2748 0%, var(--bg) 45%);
+        color: var(--text);
+      }
+      .wrap { max-width: 1440px; margin: 0 auto; padding: 20px; }
+      .headline {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        margin-bottom: 16px;
+        gap: 10px;
+      }
+      h1, h2, h3 { margin: 0 0 10px; font-weight: 600; letter-spacing: 0.2px; }
+      .muted { color: var(--muted); }
+      .grid { display: grid; gap: 14px; }
+      .stats { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 14px; }
+      .main { grid-template-columns: 2fr 1fr; align-items: start; }
+      .lower { margin-top: 14px; grid-template-columns: 2fr 1fr; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+      }
+      .stat-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+      .stat-value { font-size: 20px; font-weight: 700; }
+      .up { color: var(--up); }
+      .down { color: var(--down); }
+      .market-layout { display: grid; grid-template-columns: 1.8fr 1fr; gap: 12px; }
+      canvas { width: 100%; height: 280px; background: rgba(5, 10, 20, 0.8); border-radius: 10px; border: 1px solid var(--line); }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { border-bottom: 1px solid var(--line); padding: 7px 6px; text-align: left; }
+      th { color: var(--muted); font-weight: 500; }
+      tr:hover { background: rgba(90, 140, 255, 0.08); cursor: pointer; }
+      .ticker { font-weight: 700; color: #9ed1ff; }
+      .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .form-group { margin-bottom: 8px; }
+      label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+      input, select, button {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px;
+        color: var(--text);
+        background: rgba(7, 13, 25, 0.9);
+      }
+      button {
+        background: linear-gradient(120deg, #3179ff, #59bbff);
+        color: #fff;
+        border: 0;
+        font-weight: 600;
+      }
+      .list { margin: 0; padding-left: 18px; max-height: 280px; overflow: auto; }
+      .status { min-height: 20px; font-size: 12px; color: #8ec9ff; }
+      .split { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+      @media (max-width: 1100px) {
+        .main, .lower, .market-layout, .actions, .split { grid-template-columns: 1fr; }
+      }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <h1>World Finance Simulator (MVP)</h1>
-      <p class="muted">Realtime macro + company + stock simulation with deterministic tick engine.</p>
-
-      <div class="card">
-        <h3>Macro</h3>
-        <div id="macro">Loading...</div>
-      </div>
-      <div class="grid">
-        <div class="card">
-          <h3>Global Systems</h3>
-          <div id="systems">Loading...</div>
+      <div class="headline">
+        <div>
+          <h1>World Finance Simulator — Moonshot V11</h1>
+          <div class="muted">Realtime simulation keeps evolving on the server even when users are offline. Reconnect anytime for the latest state.</div>
         </div>
-        <div class="card">
-          <h3>Index & Funds</h3>
-          <div id="index">Loading...</div>
-        </div>
+        <div class="muted" id="clock">--</div>
       </div>
 
-      <div class="grid">
+      <div class="grid stats">
+        <div class="card"><div class="stat-label">GLOBAL100</div><div id="indexValue" class="stat-value">--</div></div>
+        <div class="card"><div class="stat-label">GDP Growth</div><div id="gdp" class="stat-value">--</div></div>
+        <div class="card"><div class="stat-label">Inflation</div><div id="inflation" class="stat-value">--</div></div>
+        <div class="card"><div class="stat-label">Unemployment</div><div id="unemployment" class="stat-value">--</div></div>
+        <div class="card"><div class="stat-label">Geo Tension</div><div id="tension" class="stat-value">--</div></div>
+        <div class="card"><div class="stat-label">Supply Pressure</div><div id="supply" class="stat-value">--</div></div>
+      </div>
+
+      <div class="grid main">
         <div class="card">
-          <h3>Create Company</h3>
-          <label>Name <input id="name" value="Aether Dynamics" /></label><br /><br />
-          <label>Country <input id="country" value="USA" /></label><br /><br />
-          <label>Sector <input id="sector" value="AI" /></label><br /><br />
-          <button id="createBtn">Create</button>
+          <h3>Global Stock Market</h3>
+          <div class="market-layout">
+            <div>
+              <canvas id="chart" width="900" height="280"></canvas>
+              <div class="muted" id="selectedStockMeta">Select a stock from the table to inspect candles and trade flow.</div>
+            </div>
+            <div>
+              <h3>Trade Stocks</h3>
+              <div class="form-group"><label>Company</label><select id="tradeCompany"></select></div>
+              <div class="split">
+                <div class="form-group"><label>Side</label><select id="tradeSide"><option value="buy">Buy</option><option value="sell">Sell</option></select></div>
+                <div class="form-group"><label>Quantity</label><input id="tradeQty" type="number" value="100" min="1" /></div>
+              </div>
+              <div class="form-group"><label>Price</label><input id="tradePrice" type="number" step="0.0001" /></div>
+              <button id="tradeBtn">Submit Order</button>
+              <div class="status" id="tradeStatus"></div>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Ticker</th><th>Company</th><th>Price</th><th>Market Cap</th><th>P/E</th><th>Volume</th><th>Order Depth</th><th>Status</th></tr>
+            </thead>
+            <tbody id="stocks"></tbody>
+          </table>
         </div>
-        <div class="card">
-          <h3>Headlines</h3>
-          <ul id="headlines"></ul>
+
+        <div class="grid">
+          <div class="card">
+            <h3>Create Company</h3>
+            <div class="form-group"><label>Company Name</label><input id="name" value="Aether Dynamics" /></div>
+            <div class="split">
+              <div class="form-group"><label>Country</label><input id="country" value="USA" /></div>
+              <div class="form-group"><label>Sector</label><input id="sector" value="AI" /></div>
+            </div>
+            <div class="split">
+              <div class="form-group"><label>Business Model</label><input id="model" value="SaaS" /></div>
+              <div class="form-group"><label>Initial Valuation</label><input id="valuation" type="number" value="800000000" /></div>
+            </div>
+            <button id="createBtn">Create Company</button>
+            <div class="status" id="createStatus"></div>
+          </div>
+
+          <div class="card">
+            <h3>Strategic Action Console</h3>
+            <div class="form-group">
+              <label>Action</label>
+              <select id="actionType">
+                <option value="LAUNCH_PRODUCT">Launch products</option>
+                <option value="MANIPULATE_MARKET">Manipulate markets</option>
+                <option value="ACQUIRE_COMPETITOR">Acquire competitors</option>
+                <option value="RAISE_VENTURE_CAPITAL">Raise venture capital</option>
+                <option value="BUILD_FACTORY">Build factories</option>
+                <option value="MANAGE_LOGISTICS">Manage logistics</option>
+                <option value="INFLUENCE_GOVERNMENT">Influence governments</option>
+                <option value="CREATE_MONOPOLY">Create monopolies</option>
+                <option value="TRIGGER_ECONOMIC_WAR">Trigger economic wars</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Company</label><select id="actionCompany"></select></div>
+            <div class="actions">
+              <div class="form-group"><label>Buyer (M&A)</label><select id="buyerCompany"></select></div>
+              <div class="form-group"><label>Target (M&A)</label><select id="targetCompany"></select></div>
+              <div class="form-group"><label>Country</label><input id="actionCountry" placeholder="USA / China / ..." /></div>
+              <div class="form-group"><label>Region</label><input id="actionRegion" placeholder="Middle East / Pacific / ..." /></div>
+              <div class="form-group"><label>Intensity</label><input id="actionIntensity" type="number" step="0.1" value="1" /></div>
+              <div class="form-group"><label>Direction (market)</label><select id="actionDirection"><option value="pump">Pump</option><option value="dump">Dump</option></select></div>
+            </div>
+            <button id="actionBtn">Execute Strategic Action</button>
+            <div class="status" id="actionStatus"></div>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <h3>Stocks</h3>
-        <table>
-          <thead>
-            <tr><th>Ticker</th><th>Price</th><th>Market Cap</th><th>P/E</th><th>Volume</th><th>Halt</th></tr>
-          </thead>
-          <tbody id="stocks"></tbody>
-        </table>
-      </div>
-      <div class="grid">
+      <div class="grid lower">
         <div class="card">
-          <h3>Top Companies</h3>
-          <ol id="topCompanies"></ol>
+          <h3>News, Media & Rankings</h3>
+          <div class="split">
+            <div>
+              <div class="muted">Headlines</div>
+              <ul class="list" id="headlines"></ul>
+            </div>
+            <div>
+              <div class="muted">Top Companies</div>
+              <ol class="list" id="topCompanies"></ol>
+              <div class="muted">Richest Agents</div>
+              <ol class="list" id="richest"></ol>
+            </div>
+          </div>
         </div>
         <div class="card">
-          <h3>Richest Agents</h3>
-          <ol id="richest"></ol>
+          <h3>World Systems</h3>
+          <div id="systems" class="muted">Loading...</div>
         </div>
       </div>
     </div>
+
     <script>
-      const macroEl = document.getElementById("macro");
-      const systemsEl = document.getElementById("systems");
-      const indexEl = document.getElementById("index");
-      const stocksEl = document.getElementById("stocks");
-      const headlinesEl = document.getElementById("headlines");
-      const topCompaniesEl = document.getElementById("topCompanies");
-      const richestEl = document.getElementById("richest");
+      const $ = (id) => document.getElementById(id);
+      let latestState = null;
+      let selectedCompanyId = null;
 
-      function n(v) { return Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
-
-      function render(state) {
-        macroEl.textContent = `Tick ${state.tick} | GDP ${(state.macro.gdpGrowth * 100).toFixed(2)}% | Inflation ${(state.macro.inflation * 100).toFixed(2)}% | Unemployment ${(state.macro.unemployment * 100).toFixed(2)}% | Rate ${(state.macro.rate * 100).toFixed(2)}% | Sentiment ${(state.sentiment * 100).toFixed(1)}%`;
-        systemsEl.textContent = `Supply pressure ${(state.supplyChains.pressure * 100).toFixed(1)}% | Geopolitical tension ${(state.geopolitics.tension * 100).toFixed(1)}% | Policy pressure ${(state.policyPressure * 100).toFixed(1)}% | Consumer confidence ${(state.population.consumerConfidence * 100).toFixed(1)}%`;
-        indexEl.innerHTML = `GLOBAL100 <span class="${state.indexes.GLOBAL100.changePct >= 0 ? "up" : "down"}">${n(state.indexes.GLOBAL100.value)} (${n(state.indexes.GLOBAL100.changePct)}%)</span><br/>Institutional AUM: ${n(state.funds.institutionalAUM)}<br/>Hedge AUM: ${n(state.funds.hedgeAUM)}<br/>Retail Liquidity: ${n(state.funds.retailLiquidity)}`;
-        stocksEl.innerHTML = state.stocks.map((s) => `<tr><td class="ticker">${s.ticker}${s.listed ? "" : " (DL)"}</td><td>${n(s.lastPrice)}</td><td>${n(s.marketCap)}</td><td>${n(s.peRatio)}</td><td>${n(s.volume)}</td><td>${s.halted ? "Yes" : "No"}</td></tr>`).join("");
-        headlinesEl.innerHTML = state.headlines.map((h) => `<li>${h.headline}</li>`).join("");
-        topCompaniesEl.innerHTML = state.leaderboards.companies.map((c) => `<li>${c.name} — ${n(c.valuation)}</li>`).join("");
-        richestEl.innerHTML = state.population.topRichest.map((a) => `<li>${a.type} (${a.id}) — ${n(a.wealth)}</li>`).join("");
+      function n(v, d = 2) {
+        return Number(v ?? 0).toLocaleString(undefined, { maximumFractionDigits: d });
       }
 
-      async function createCompany() {
-        await fetch("/api/company", {
+      async function post(url, payload) {
+        const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: document.getElementById("name").value,
-            country: document.getElementById("country").value,
-            sector: document.getElementById("sector").value
-          })
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "Request failed");
+        return data;
+      }
+
+      function setStatus(el, message, error = false) {
+        el.textContent = message;
+        el.style.color = error ? "#ff8fa9" : "#8ec9ff";
+      }
+
+      function populateCompanySelects(companies, keepId) {
+        const selects = [$("tradeCompany"), $("actionCompany"), $("buyerCompany"), $("targetCompany")];
+        const options = companies.map((c) => `<option value="${c.id}">${c.name} (${c.country} · ${c.sector})</option>`).join("");
+        for (const select of selects) {
+          const prev = select.value || keepId;
+          select.innerHTML = options;
+          if (companies.some((c) => c.id === prev)) select.value = prev;
+        }
+      }
+
+      function drawCandles(stock) {
+        const canvas = $("chart");
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(5,10,20,0.9)";
+        ctx.fillRect(0, 0, w, h);
+        if (!stock?.candles?.length) return;
+
+        const candles = stock.candles.slice(-60);
+        const prices = candles.flatMap((c) => [c.low, c.high]);
+        const min = Math.min(...prices);
+        const max = Math.max(...prices);
+        const range = Math.max(0.0001, max - min);
+        const candleW = Math.max(4, (w - 40) / candles.length - 2);
+        const toY = (price) => 15 + ((max - price) / range) * (h - 30);
+
+        ctx.strokeStyle = "rgba(95,130,190,0.4)";
+        for (let i = 0; i < 5; i += 1) {
+          const y = 15 + (h - 30) * (i / 4);
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+
+        candles.forEach((candle, i) => {
+          const x = 20 + i * (candleW + 2);
+          const openY = toY(candle.open);
+          const closeY = toY(candle.close);
+          const highY = toY(candle.high);
+          const lowY = toY(candle.low);
+          const up = candle.close >= candle.open;
+
+          ctx.strokeStyle = up ? "#45f6b0" : "#ff7f9c";
+          ctx.beginPath();
+          ctx.moveTo(x + candleW / 2, highY);
+          ctx.lineTo(x + candleW / 2, lowY);
+          ctx.stroke();
+
+          ctx.fillStyle = up ? "#45f6b0" : "#ff7f9c";
+          const bodyY = Math.min(openY, closeY);
+          const bodyH = Math.max(2, Math.abs(closeY - openY));
+          ctx.fillRect(x, bodyY, candleW, bodyH);
         });
       }
 
-      document.getElementById("createBtn").addEventListener("click", createCompany);
+      function render(state) {
+        latestState = state;
+        $("clock").textContent = `Tick ${state.tick} · ${new Date(state.time).toLocaleString()}`;
+        $("indexValue").innerHTML = `${n(state.indexes.GLOBAL100.value)} <span class="${state.indexes.GLOBAL100.changePct >= 0 ? "up" : "down"}">${n(state.indexes.GLOBAL100.changePct)}%</span>`;
+        $("gdp").textContent = `${n(state.macro.gdpGrowth * 100)}%`;
+        $("inflation").textContent = `${n(state.macro.inflation * 100)}%`;
+        $("unemployment").textContent = `${n(state.macro.unemployment * 100)}%`;
+        $("tension").textContent = `${n(state.geopolitics.tension * 100)}%`;
+        $("supply").textContent = `${n(state.supplyChains.pressure * 100)}%`;
+        $("systems").innerHTML = `
+          Sentiment: ${n(state.sentiment * 100)}%<br>
+          Policy pressure: ${n(state.policyPressure * 100)}%<br>
+          Consumer confidence: ${n(state.population.consumerConfidence * 100)}%<br>
+          Institutional AUM: ${n(state.funds.institutionalAUM)}<br>
+          Hedge AUM: ${n(state.funds.hedgeAUM)}<br>
+          Retail liquidity: ${n(state.funds.retailLiquidity)}<br>
+          Active conflicts: ${(state.geopolitics.activeConflicts || []).join(", ") || "None"}<br>
+          Treaties: ${(state.geopolitics.treaties || []).slice(0, 3).join(", ") || "None"}
+        `;
+
+        const stocks = state.stocks.slice().sort((a, b) => b.marketCap - a.marketCap);
+        $("stocks").innerHTML = stocks.map((s) => `
+          <tr data-company="${s.companyId}">
+            <td class="ticker">${s.ticker}${s.listed ? "" : " (DL)"}</td>
+            <td>${s.companyName}</td>
+            <td>${n(s.lastPrice, 4)}</td>
+            <td>${n(s.marketCap)}</td>
+            <td>${n(s.peRatio)}</td>
+            <td>${n(s.volume, 0)}</td>
+            <td>${s.buyDepth}/${s.sellDepth}</td>
+            <td>${s.halted ? "Halted" : "Open"}</td>
+          </tr>
+        `).join("");
+
+        const companies = state.companies.slice().sort((a, b) => b.valuation - a.valuation);
+        if (!selectedCompanyId || !companies.some((c) => c.id === selectedCompanyId)) selectedCompanyId = companies[0]?.id ?? null;
+        populateCompanySelects(companies, selectedCompanyId);
+
+        const stock = stocks.find((s) => s.companyId === selectedCompanyId) ?? stocks[0];
+        if (stock) {
+          selectedCompanyId = stock.companyId;
+          $("tradeCompany").value = stock.companyId;
+          $("actionCompany").value = stock.companyId;
+          $("selectedStockMeta").textContent = `${stock.companyName} (${stock.ticker}) · Price ${n(stock.lastPrice, 4)} · Market cap ${n(stock.marketCap)} · P/E ${n(stock.peRatio)} · Volume ${n(stock.volume, 0)}`;
+          if (!$("tradePrice").value || Number($("tradePrice").value) <= 0) $("tradePrice").value = stock.lastPrice;
+          drawCandles(stock);
+        }
+
+        $("headlines").innerHTML = state.headlines.map((h) => `<li>${h.headline}</li>`).join("");
+        $("topCompanies").innerHTML = state.leaderboards.companies.map((c) => `<li>${c.name} — ${n(c.valuation)}</li>`).join("");
+        $("richest").innerHTML = state.population.topRichest.map((a) => `<li>${a.type} (${a.id}) — ${n(a.wealth)}</li>`).join("");
+
+        document.querySelectorAll("#stocks tr").forEach((row) => {
+          row.addEventListener("click", () => {
+            selectedCompanyId = row.dataset.company;
+            render(latestState);
+          });
+        });
+      }
+
+      $("createBtn").addEventListener("click", async () => {
+        try {
+          const company = await post("/api/company", {
+            name: $("name").value,
+            country: $("country").value,
+            sector: $("sector").value,
+            businessModel: $("model").value,
+            initialValuation: Number($("valuation").value || 800000000)
+          });
+          selectedCompanyId = company.id;
+          setStatus($("createStatus"), `Created ${company.name} (${company.country} · ${company.sector})`);
+        } catch (error) {
+          setStatus($("createStatus"), error.message, true);
+        }
+      });
+
+      $("tradeBtn").addEventListener("click", async () => {
+        try {
+          await post("/api/order", {
+            companyId: $("tradeCompany").value,
+            side: $("tradeSide").value,
+            quantity: Number($("tradeQty").value || 0),
+            price: Number($("tradePrice").value || 0),
+            traderId: "player"
+          });
+          setStatus($("tradeStatus"), "Order accepted and matched against order book if possible.");
+        } catch (error) {
+          setStatus($("tradeStatus"), error.message, true);
+        }
+      });
+
+      $("actionBtn").addEventListener("click", async () => {
+        try {
+          const actionType = $("actionType").value;
+          const payload = {
+            actionType,
+            companyId: $("actionCompany").value,
+            buyerId: $("buyerCompany").value,
+            targetId: $("targetCompany").value,
+            country: $("actionCountry").value || undefined,
+            region: $("actionRegion").value || undefined,
+            intensity: Number($("actionIntensity").value || 1),
+            direction: $("actionDirection").value
+          };
+          const result = await post("/api/action", payload);
+          setStatus($("actionStatus"), `${actionType} executed: ${JSON.stringify(result)}`);
+        } catch (error) {
+          setStatus($("actionStatus"), error.message, true);
+        }
+      });
+
+      $("tradeCompany").addEventListener("change", () => {
+        selectedCompanyId = $("tradeCompany").value;
+        if (latestState) render(latestState);
+      });
 
       const stream = new EventSource("/api/stream");
       stream.onmessage = (evt) => render(JSON.parse(evt.data));
+      stream.onerror = () => setStatus($("actionStatus"), "Realtime stream disconnected. Reconnecting...");
     </script>
   </body>
 </html>

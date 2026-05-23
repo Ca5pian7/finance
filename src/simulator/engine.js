@@ -292,6 +292,12 @@ function updateLeaderboards(state) {
   state.player.rank = state.leaderboards.richest.findIndex((agent) => agent.wealth <= state.player.netWorth) + 1;
 }
 
+function requireCompany(state, companyId) {
+  const company = state.companies[companyId];
+  if (!company) throw new Error("Unknown company");
+  return company;
+}
+
 export function executeMerger(state, { buyerId, targetId }) {
   const buyer = state.companies[buyerId];
   const target = state.companies[targetId];
@@ -311,6 +317,95 @@ export function executeMerger(state, { buyerId, targetId }) {
   state.geopolitics.tension = bounded(state.geopolitics.tension + 0.01, 0, 1);
   applyEvent(state, { type: "MERGER", buyerName: buyer.name, targetName: target.name });
   return { buyerId, targetId, buyerValuation: buyer.valuation, targetDelisted: true };
+}
+
+export function executeStrategicAction(state, payload = {}) {
+  const actionType = payload.actionType;
+  const intensity = bounded(Number(payload.intensity ?? 1), 0.5, 5);
+
+  switch (actionType) {
+    case "LAUNCH_PRODUCT": {
+      const company = requireCompany(state, payload.companyId);
+      applyEvent(state, { type: "PRODUCT_LAUNCH", companyId: company.id, companyName: company.name });
+      company.innovation = bounded(company.innovation + 0.03 * intensity, 0, 1);
+      return { actionType, companyId: company.id, status: "ok" };
+    }
+    case "MANIPULATE_MARKET": {
+      const company = requireCompany(state, payload.companyId);
+      const stock = state.stocks[company.id];
+      if (!stock?.listed) throw new Error("Security not listed");
+      const direction = payload.direction === "dump" ? "dump" : "pump";
+      const move = direction === "pump" ? 0.02 * intensity : -0.025 * intensity;
+      stock.lastPrice = Number(Math.max(0.1, stock.lastPrice * (1 + move)).toFixed(4));
+      stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
+      stock.shortInterest = bounded(stock.shortInterest + (direction === "pump" ? -0.015 : 0.03), 0, 0.5);
+      state.sentiment = bounded(state.sentiment + (direction === "pump" ? 0.01 : -0.02), -1, 1);
+      pushHeadline(
+        state,
+        `${company.name} is at the center of a suspected ${direction === "pump" ? "pump" : "dump"} market manipulation wave`,
+        direction === "pump" ? 0.01 : -0.02
+      );
+      return { actionType, companyId: company.id, direction, status: "ok" };
+    }
+    case "RAISE_VENTURE_CAPITAL": {
+      const company = requireCompany(state, payload.companyId);
+      const raiseAmount = Math.max(10_000_000, Number(payload.amount ?? 250_000_000));
+      company.valuation = Number((company.valuation + raiseAmount).toFixed(2));
+      company.rdBudget = bounded(company.rdBudget + 0.01 * intensity, 0.01, 0.5);
+      company.aiCapability = bounded(company.aiCapability + 0.01 * intensity, 0, 1);
+      pushHeadline(state, `${company.name} raises ${Math.round(raiseAmount / 1_000_000)}M in venture capital`, 0.025);
+      return { actionType, companyId: company.id, raiseAmount, status: "ok" };
+    }
+    case "BUILD_FACTORY": {
+      const company = requireCompany(state, payload.companyId);
+      const workers = Math.max(100, Math.round(600 * intensity));
+      company.employees += workers;
+      company.supplyRisk = bounded(company.supplyRisk - 0.03 * intensity, 0, 1);
+      company.carbonEmissions += Math.round(workers * 0.5);
+      pushHeadline(state, `${company.name} opens new smart factories to scale output`, 0.018);
+      return { actionType, companyId: company.id, workersAdded: workers, status: "ok" };
+    }
+    case "MANAGE_LOGISTICS": {
+      const company = requireCompany(state, payload.companyId);
+      company.supplyRisk = bounded(company.supplyRisk - 0.07 * intensity, 0, 1);
+      state.supplyChains.pressure = bounded(state.supplyChains.pressure - 0.05 * intensity, 0, 1);
+      pushHeadline(state, `${company.name} upgrades logistics networks and eases supply pressure`, 0.022);
+      return { actionType, companyId: company.id, status: "ok" };
+    }
+    case "INFLUENCE_GOVERNMENT": {
+      const company = requireCompany(state, payload.companyId);
+      const country = payload.country ?? company.country;
+      const government = state.governments[country];
+      if (!government) throw new Error("Unknown government");
+      government.subsidy = bounded(government.subsidy + 0.008 * intensity, 0, 0.2);
+      government.regulation = bounded(government.regulation - 0.01 * intensity, 0, 1);
+      company.politicalInfluence = bounded(company.politicalInfluence + 0.05 * intensity, 0, 1);
+      state.policyPressure = bounded(state.policyPressure + 0.03 * intensity, 0, 1);
+      pushHeadline(state, `${company.name} gains policy influence in ${country}`, 0.01);
+      return { actionType, companyId: company.id, country, status: "ok" };
+    }
+    case "CREATE_MONOPOLY": {
+      const company = requireCompany(state, payload.companyId);
+      company.marketDominance = bounded(company.marketDominance + 0.15 * intensity, 0, 1);
+      company.reputation = bounded(company.reputation - 0.02 * intensity, 0, 1);
+      state.geopolitics.tension = bounded(state.geopolitics.tension + 0.015 * intensity, 0, 1);
+      state.sentiment = bounded(state.sentiment - 0.01 * intensity, -1, 1);
+      pushHeadline(state, `${company.name} is accused of monopolistic market capture`, -0.015);
+      return { actionType, companyId: company.id, status: "ok" };
+    }
+    case "TRIGGER_ECONOMIC_WAR": {
+      const region = payload.region ?? "Global Trade Routes";
+      const country = payload.country ?? "Major economy";
+      applyEvent(state, { type: "WAR", region });
+      applyEvent(state, { type: "SANCTION", country });
+      pushHeadline(state, "Economic war escalates with retaliatory sanctions and supply blockades", -0.06);
+      return { actionType, region, country, status: "ok" };
+    }
+    case "ACQUIRE_COMPETITOR":
+      return executeMerger(state, { buyerId: payload.buyerId, targetId: payload.targetId });
+    default:
+      throw new Error("Unknown strategic action");
+  }
 }
 
 function applyGovernmentDrift(state, rng) {
