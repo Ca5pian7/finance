@@ -13,6 +13,8 @@
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
       th, td { text-align: left; padding: 8px; border-bottom: 1px solid #273149; }
       .ticker { color: #88d6ff; font-weight: 700; }
+      .up { color: #69f0ae; }
+      .down { color: #ff8a8a; }
       .muted { color: #a3aec6; }
       button { background: #2e69ff; color: white; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
       input, select { background: #0e1523; color: #f4f7ff; border: 1px solid #273149; border-radius: 6px; padding: 8px; width: 100%; }
@@ -26,6 +28,16 @@
       <div class="card">
         <h3>Macro</h3>
         <div id="macro">Loading...</div>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h3>Global Systems</h3>
+          <div id="systems">Loading...</div>
+        </div>
+        <div class="card">
+          <h3>Index & Funds</h3>
+          <div id="index">Loading...</div>
+        </div>
       </div>
 
       <div class="grid">
@@ -51,18 +63,36 @@
           <tbody id="stocks"></tbody>
         </table>
       </div>
+      <div class="grid">
+        <div class="card">
+          <h3>Top Companies</h3>
+          <ol id="topCompanies"></ol>
+        </div>
+        <div class="card">
+          <h3>Richest Agents</h3>
+          <ol id="richest"></ol>
+        </div>
+      </div>
     </div>
     <script>
       const macroEl = document.getElementById("macro");
+      const systemsEl = document.getElementById("systems");
+      const indexEl = document.getElementById("index");
       const stocksEl = document.getElementById("stocks");
       const headlinesEl = document.getElementById("headlines");
+      const topCompaniesEl = document.getElementById("topCompanies");
+      const richestEl = document.getElementById("richest");
 
       function n(v) { return Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
 
       function render(state) {
         macroEl.textContent = `Tick ${state.tick} | GDP ${(state.macro.gdpGrowth * 100).toFixed(2)}% | Inflation ${(state.macro.inflation * 100).toFixed(2)}% | Unemployment ${(state.macro.unemployment * 100).toFixed(2)}% | Rate ${(state.macro.rate * 100).toFixed(2)}% | Sentiment ${(state.sentiment * 100).toFixed(1)}%`;
-        stocksEl.innerHTML = state.stocks.map((s) => `<tr><td class="ticker">${s.ticker}</td><td>${n(s.lastPrice)}</td><td>${n(s.marketCap)}</td><td>${n(s.peRatio)}</td><td>${n(s.volume)}</td><td>${s.halted ? "Yes" : "No"}</td></tr>`).join("");
+        systemsEl.textContent = `Supply pressure ${(state.supplyChains.pressure * 100).toFixed(1)}% | Geopolitical tension ${(state.geopolitics.tension * 100).toFixed(1)}% | Policy pressure ${(state.policyPressure * 100).toFixed(1)}% | Consumer confidence ${(state.population.consumerConfidence * 100).toFixed(1)}%`;
+        indexEl.innerHTML = `GLOBAL100 <span class="${state.indexes.GLOBAL100.changePct >= 0 ? "up" : "down"}">${n(state.indexes.GLOBAL100.value)} (${n(state.indexes.GLOBAL100.changePct)}%)</span><br/>Institutional AUM: ${n(state.funds.institutionalAUM)}<br/>Hedge AUM: ${n(state.funds.hedgeAUM)}<br/>Retail Liquidity: ${n(state.funds.retailLiquidity)}`;
+        stocksEl.innerHTML = state.stocks.map((s) => `<tr><td class="ticker">${s.ticker}${s.listed ? "" : " (DL)"}</td><td>${n(s.lastPrice)}</td><td>${n(s.marketCap)}</td><td>${n(s.peRatio)}</td><td>${n(s.volume)}</td><td>${s.halted ? "Yes" : "No"}</td></tr>`).join("");
         headlinesEl.innerHTML = state.headlines.map((h) => `<li>${h.headline}</li>`).join("");
+        topCompaniesEl.innerHTML = state.leaderboards.companies.map((c) => `<li>${c.name} — ${n(c.valuation)}</li>`).join("");
+        richestEl.innerHTML = state.population.topRichest.map((a) => `<li>${a.type} (${a.id}) — ${n(a.wealth)}</li>`).join("");
       }
 
       async function createCompany() {
