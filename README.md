@@ -12,7 +12,10 @@ This repository now contains an executable V10 foundation for a realistic global
   - Built-in market maker liquidity so buy and sell orders can fill immediately
   - Matching engine
   - Price updates, market cap, volume, PE ratio, short interest, dividend yield
+  - Day-based price effect display with 5M/15M/1H/1D chart intervals
   - Crowd-pressure/stability dynamics with 10,000,000 simulated participants
+  - Stronger support/resistance with gradual break pressure (time-to-break behavior)
+  - Stabilized daily move profile (typical ~7–10% range, with larger news-driven one-day spikes possible)
   - Continuous listing model (no delisting/halt shutdown state)
 - Macro + supply shock coupling
   - GDP growth, inflation, unemployment, policy rate
@@ -23,7 +26,7 @@ This repository now contains an executable V10 foundation for a realistic global
 - News/sentiment engine (headline generation from events)
 - Supply chain + regional pressure model
 - AI population model (consumers, investors, CEOs, workers, politicians, influencers)
-- Funds/index layer (institutional/hedge/retail liquidity + GLOBAL100 index)
+- Funds/index layer (institutional/hedge/retail liquidity + valuation-weighted GLOBAL100 and GLOBAL ALL indexes)
 - Corporate mergers with delisting outcomes and leaderboard progression
 - Persistence + offline progression
   - Checkpoint save/load

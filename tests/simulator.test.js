@@ -296,3 +296,38 @@ test("richest leaderboard includes billionaires with company stake", () => {
   assert.ok(state.leaderboards.richest.every((entry) => Number.isFinite(Number(entry.stakePct ?? 0))));
   assert.ok(state.leaderboards.richest.some((entry) => entry.id === "player"));
 });
+
+test("daily stock move remains bounded without strong news shocks", () => {
+  const state = createInitialState({ seed: 101 });
+  upsertCompany(state, createCompany({ id: "d1", name: "Daily Bound", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  const ticksPerDay = state.marketSession.ticksPerDay;
+  for (let i = 0; i < ticksPerDay; i += 1) runTick(state);
+
+  const stock = state.stocks.d1;
+  const dayOpen = stock.dayOpenPrice;
+  const upMove = (stock.dayHigh - dayOpen) / Math.max(0.1, dayOpen);
+  const downMove = (dayOpen - stock.dayLow) / Math.max(0.1, dayOpen);
+  assert.ok(upMove <= 0.101);
+  assert.ok(downMove <= 0.101);
+});
+
+test("global all index tracks all listed stocks with valuation weighting", () => {
+  const state = createInitialState({ seed: 102 });
+  upsertCompany(
+    state,
+    createCompany({ id: "big", name: "Big Cap", country: "USA", sector: "AI", businessModel: "SaaS", initialValuation: 5_000_000_000 })
+  );
+  upsertCompany(
+    state,
+    createCompany({ id: "small", name: "Small Cap", country: "USA", sector: "AI", businessModel: "SaaS", initialValuation: 800_000_000 })
+  );
+
+  runTick(state);
+
+  assert.ok(state.indexes.GLOBAL_ALL);
+  assert.ok(state.indexes.GLOBAL_ALL.value > 0);
+  assert.equal(state.indexes.GLOBAL_ALL.members.length, 2);
+  assert.ok(state.indexes.GLOBAL_ALL.members.includes(state.stocks.big.ticker));
+  assert.ok(state.indexes.GLOBAL_ALL.members.includes(state.stocks.small.ticker));
+});

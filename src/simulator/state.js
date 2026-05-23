@@ -62,7 +62,8 @@ export function createInitialState({ seed = 42 } = {}) {
       aiBotAggression: 0.35
     },
     indexes: {
-      GLOBAL100: { value: 1000, changePct: 0, members: [] }
+      GLOBAL100: { value: 1000, changePct: 0, members: [] },
+      GLOBAL_ALL: { value: 1000, changePct: 0, members: [] }
     },
     leaderboards: {
       companies: [],
@@ -167,8 +168,16 @@ export function createCompany({
       stability: 0.7,
       buyPressure: 0.5,
       sellPressure: 0.5,
+      dayOpenPrice: initialPrice,
+      dayHigh: initialPrice,
+      dayLow: initialPrice,
       support: initialPrice * 0.96,
       resistance: initialPrice * 1.04,
+      supportStrength: 0.72,
+      resistanceStrength: 0.72,
+      supportBreakPressure: 0,
+      resistanceBreakPressure: 0,
+      newsMomentum: 0,
       candles: []
     }
   };
