@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { executeMerger, executeStrategicAction, placeOrder, runTick } from "../src/simulator/engine.js";
-import { createCompany, createInitialState, upsertCompany } from "../src/simulator/state.js";
+import { calculatePeRatio, createCompany, createInitialState, upsertCompany } from "../src/simulator/state.js";
 
 test("simulation is deterministic for same seed and event sequence", () => {
   const a = createInitialState({ seed: 123 });
@@ -184,6 +184,25 @@ test("player buy and sell orders update cash and holdings", () => {
   assert.ok(state.player.cash > afterBuyCash);
 });
 
+test("player can short sell shares and buy them back", () => {
+  const state = createInitialState({ seed: 93 });
+  upsertCompany(state, createCompany({ id: "sh", name: "Short Horizon", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  const startCash = state.player.cash;
+  placeOrder(state, { companyId: "sh", side: "buy", orderType: "limit", price: 10, quantity: 100, traderId: "maker-buy" });
+  const shortTrades = placeOrder(state, { companyId: "sh", side: "sell", orderType: "limit", price: 9.8, quantity: 40, traderId: "player" });
+  assert.equal(shortTrades.length, 1);
+  assert.equal(state.player.holdings.sh, -40);
+  assert.ok(state.player.cash > startCash);
+
+  const afterShortCash = state.player.cash;
+  placeOrder(state, { companyId: "sh", side: "sell", orderType: "limit", price: 10.2, quantity: 100, traderId: "maker-sell" });
+  const coverTrades = placeOrder(state, { companyId: "sh", side: "buy", orderType: "limit", price: 10.4, quantity: 25, traderId: "player" });
+  assert.equal(coverTrades.length, 1);
+  assert.equal(state.player.holdings.sh, -15);
+  assert.ok(state.player.cash < afterShortCash);
+});
+
 test("player orders enforce cash and position constraints", () => {
   const state = createInitialState({ seed: 89 });
   upsertCompany(state, createCompany({ id: "cx", name: "Constraint Co", country: "USA", sector: "AI", businessModel: "SaaS" }));
@@ -195,8 +214,34 @@ test("player orders enforce cash and position constraints", () => {
   );
 
   assert.throws(
-    () => placeOrder(state, { companyId: "cx", side: "sell", orderType: "limit", price: 10, quantity: 1, traderId: "player" }),
-    /Insufficient shares to sell/
+    () => placeOrder(state, { companyId: "cx", side: "sell", orderType: "limit", price: 10, quantity: 38_000_001, traderId: "player" }),
+    /Insufficient borrow availability to short/
+  );
+});
+
+test("p/e ratio is derived from earnings and refreshes with price moves", () => {
+  const state = createInitialState({ seed: 94 });
+  const company = createCompany({ id: "pe", name: "Price Earnings", country: "USA", sector: "AI", businessModel: "SaaS" });
+  upsertCompany(state, company);
+
+  assert.equal(
+    state.stocks.pe.peRatio,
+    calculatePeRatio({
+      marketCap: state.stocks.pe.marketCap,
+      revenue: state.companies.pe.kpis.revenue,
+      profitMargin: state.companies.pe.kpis.profitMargin
+    })
+  );
+
+  executeStrategicAction(state, { actionType: "MANIPULATE_MARKET", companyId: "pe", direction: "pump", intensity: 2 });
+
+  assert.equal(
+    state.stocks.pe.peRatio,
+    calculatePeRatio({
+      marketCap: state.stocks.pe.marketCap,
+      revenue: state.companies.pe.kpis.revenue,
+      profitMargin: state.companies.pe.kpis.profitMargin
+    })
   );
 });
 
