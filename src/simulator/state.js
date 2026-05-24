@@ -70,7 +70,9 @@ export function createInitialState({ seed = 42 } = {}) {
     },
     leaderboards: {
       companies: [],
-      richest: []
+      richest: [],
+      sectors: [],
+      countries: []
     },
     player: {
       role: "startup founder",
@@ -78,14 +80,42 @@ export function createInitialState({ seed = 42 } = {}) {
       netWorth: 50_000_000_000,
       influence: 0.1,
       rank: 0,
-      holdings: {}
+      holdings: {},
+      positions: {},
+      trades: [],
+      analytics: {
+        realizedPnl: 0,
+        unrealizedPnl: 0,
+        totalPnl: 0,
+        positionsCount: 0,
+        grossExposure: 0,
+        longExposure: 0,
+        shortExposure: 0,
+        turnover: 0,
+        winRate: 0,
+        cashUtilization: 0,
+        exposureBySector: [],
+        exposureByCountry: [],
+        positions: [],
+        topPosition: null,
+        worstPosition: null
+      }
     },
     companies: {},
     stocks: {},
     orderBooks: {},
     headlines: [],
     events: [],
-    checkpoints: []
+    checkpoints: [],
+    analytics: {
+      alerts: [],
+      supplyRisk: {
+        routes: [],
+        regions: [],
+        summary: {}
+      },
+      market: {}
+    }
   };
 }
 

@@ -471,6 +471,130 @@
         font-size: 11px;
         background: #0b1526;
       }
+      .insight-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .insight-card,
+      .leader-card,
+      .route-card,
+      .signal-card {
+        background: #0b1424b3;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+      }
+      .insight-label,
+      .leader-label {
+        font-size: 10px;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .insight-value {
+        font-size: 18px;
+        font-weight: 800;
+      }
+      .leaders-grid,
+      .signals-grid,
+      .supply-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .leader-row,
+      .alert-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .leader-row:last-child,
+      .alert-row:last-child {
+        border-bottom: none;
+      }
+      .alert-list {
+        display: grid;
+        gap: 8px;
+      }
+      .alert-item {
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #091223c7;
+        padding: 10px;
+      }
+      .alert-item.critical { border-color: #ff7e98aa; background: #341520cc; }
+      .alert-item.high { border-color: #ffb34788; background: #2c1e0ecc; }
+      .alert-item.medium { border-color: #64a9ff88; }
+      .alert-item.low { border-color: #39e0a255; }
+      .alert-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .alert-title { font-weight: 700; font-size: 13px; }
+      .severity-badge {
+        font-size: 10px;
+        font-weight: 800;
+        padding: 3px 7px;
+        border-radius: 999px;
+        text-transform: uppercase;
+      }
+      .severity-badge.critical { background: #ff7e9833; color: var(--down); }
+      .severity-badge.high { background: #ffb34733; color: var(--warn); }
+      .severity-badge.medium { background: #64a9ff33; color: var(--accent); }
+      .severity-badge.low { background: #39e0a233; color: var(--up); }
+      .heat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 8px;
+      }
+      .heat-cell {
+        border-radius: 10px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        background: #091223c7;
+      }
+      .heat-bar,
+      .route-bar {
+        margin-top: 8px;
+        height: 7px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #1a2f50;
+      }
+      .heat-fill,
+      .route-fill {
+        height: 100%;
+        border-radius: inherit;
+      }
+      .toast-stack {
+        position: fixed;
+        top: 96px;
+        right: 18px;
+        width: min(340px, calc(100vw - 36px));
+        display: grid;
+        gap: 8px;
+        z-index: 120;
+        pointer-events: none;
+      }
+      .toast {
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        padding: 10px 12px;
+        background: #0a1322f5;
+        box-shadow: 0 18px 40px #00000055;
+      }
+      .toast.critical { border-color: #ff7e98aa; }
+      .toast.high { border-color: #ffb347aa; }
+      .toast .tiny { display: block; margin-top: 4px; }
 
       /* ── RESPONSIVE ── */
       @media (max-width: 1100px) {
@@ -488,6 +612,7 @@
         .eco-row { grid-template-columns: 1fr; }
         .country-grid { grid-template-columns: repeat(2, 1fr); }
         .markets-top { grid-template-columns: repeat(2, 1fr); }
+        .toast-stack { position: static; width: 100%; margin: 12px 18px 0; }
       }
       @media (max-width: 700px) {
         .stat-strip { grid-template-columns: repeat(2, 1fr); }
@@ -524,6 +649,7 @@
     <div class="news">
       <div class="news-track" id="newsTicker">Loading market news…</div>
     </div>
+    <div class="toast-stack" id="toastStack"></div>
 
     <!-- ════════ PAGE: TRADING ════════ -->
     <div id="page-trading" class="page active">
@@ -586,6 +712,7 @@
         <div class="card" style="max-height:220px;overflow:auto">
           <div class="card-title">Portfolio</div>
           <div class="tiny" id="portfolioSummary">No positions</div>
+          <div class="insight-grid" id="portfolioIntel"></div>
           <div id="portfolioList" style="margin-top:8px"></div>
         </div>
 
@@ -675,6 +802,20 @@
       </div>
 
       <div class="card-title" style="margin-bottom:10px">All Stocks</div>
+      <div class="leaders-grid">
+        <div class="card">
+          <div class="card-title">Sector Leadership</div>
+          <div id="mSectorLeaders"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Country Leadership</div>
+          <div id="mCountryLeaders"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Live Alert Tape</div>
+          <div id="mAlertTape"></div>
+        </div>
+      </div>
       <div class="markets-grid" id="marketsGrid"></div>
     </div>
 
@@ -716,12 +857,20 @@
         </div>
         <div>
           <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Intelligence Scorecard</div>
+            <div class="insight-grid" id="cIntel"></div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
             <div class="card-title">Buy / Sell Pressure</div>
             <div id="cPressure"></div>
           </div>
           <div class="card" style="margin-bottom:12px">
             <div class="card-title">Order Book Depth</div>
             <div id="cDepth"></div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Catalysts &amp; Risk Signals</div>
+            <div id="cSignals"></div>
           </div>
           <div class="card">
             <div class="card-title">Company Info</div>
@@ -810,6 +959,28 @@
           <div class="card-title">Recent Market Events</div>
           <div id="eHeadlines"></div>
         </div>
+        <div class="card">
+          <div class="card-title">Critical Alerts</div>
+          <div id="eAlerts"></div>
+        </div>
+      </div>
+
+      <div class="eco-row">
+        <div class="card">
+          <div class="card-title">Supply Risk Heat Map</div>
+          <div class="heat-grid" id="eSupplyRegions"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Route Diagnostics</div>
+          <div id="eSupplyRoutes"></div>
+        </div>
+      </div>
+
+      <div class="eco-row">
+        <div class="card">
+          <div class="card-title">Player Trade Tape</div>
+          <div id="eTradeTape"></div>
+        </div>
       </div>
     </div>
 
@@ -831,11 +1002,37 @@
       };
       const fmtBig = (v) => {
         v = Number(v ?? 0);
-        if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
-        if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
-        if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+        const abs = Math.abs(v);
+        if (abs >= 1e12) return `${v < 0 ? "-" : ""}$${(abs / 1e12).toFixed(2)}T`;
+        if (abs >= 1e9) return `${v < 0 ? "-" : ""}$${(abs / 1e9).toFixed(2)}B`;
+        if (abs >= 1e6) return `${v < 0 ? "-" : ""}$${(abs / 1e6).toFixed(2)}M`;
         return `$${n(v, 0)}`;
       };
+      const tone = (value, inverse = false) => (inverse ? (value >= 0 ? "var(--down)" : "var(--up)") : col(value));
+      const severityClass = (severity) => String(severity ?? "low").toLowerCase();
+      const progressColor = (pctValue) => {
+        if (pctValue >= 75) return "var(--down)";
+        if (pctValue >= 50) return "var(--warn)";
+        if (pctValue >= 25) return "var(--accent)";
+        return "var(--up)";
+      };
+      function renderAlertList(alerts, emptyText = "No alerts right now.") {
+        return alerts.length
+          ? `<div class="alert-list">${alerts
+              .map(
+                (alert) => `
+                <div class="alert-item ${severityClass(alert.severity)}">
+                  <div class="alert-top">
+                    <div class="alert-title">${alert.title}</div>
+                    <span class="severity-badge ${severityClass(alert.severity)}">${alert.severity}</span>
+                  </div>
+                  <div class="tiny" style="margin-bottom:4px">${String(alert.category ?? "market").toUpperCase()} · Tick ${alert.tick ?? "--"}</div>
+                  <div style="font-size:12px;line-height:1.4">${alert.detail ?? ""}</div>
+                </div>`
+              )
+              .join("")}</div>`
+          : `<div class='tiny'>${emptyText}</div>`;
+      }
 
       /* ── state ── */
       let latestState = null;
@@ -1279,9 +1476,24 @@
           .filter(Boolean)
           .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
         const totalValue = portfolioRows.reduce((sum, row) => sum + row.value, 0);
+        const playerAnalytics = state.player?.analytics ?? {};
         $("portfolioSummary").textContent = portfolioRows.length
           ? `${portfolioRows.length} position(s) · Net ${fmtBig(totalValue)}`
           : "No positions";
+        $("portfolioIntel").innerHTML = [
+          { label: "Realized", value: fmtBig(playerAnalytics.realizedPnl ?? 0), color: tone(playerAnalytics.realizedPnl ?? 0) },
+          { label: "Unrealized", value: fmtBig(playerAnalytics.unrealizedPnl ?? 0), color: tone(playerAnalytics.unrealizedPnl ?? 0) },
+          { label: "Win Rate", value: `${n(playerAnalytics.winRate ?? 0, 1)}%`, color: "var(--accent)" },
+          { label: "Gross Exposure", value: fmtBig(playerAnalytics.grossExposure ?? 0), color: "var(--text)" }
+        ]
+          .map(
+            (item) => `
+            <div class="insight-card">
+              <div class="insight-label">${item.label}</div>
+              <div class="insight-value" style="color:${item.color}">${item.value}</div>
+            </div>`
+          )
+          .join("");
         $("portfolioList").innerHTML = portfolioRows.length
           ? portfolioRows.map((row) => `
             <div class="commodity-row">
@@ -1346,6 +1558,47 @@
         const regime = String(state.marketRegime ?? "stable").toUpperCase();
         $("mSentiment").innerHTML = `<span style="color:${col(sent)}">${sent >= 0 ? "Bullish" : "Bearish"} · ${regime}</span>`;
         $("mConsConf").textContent = `Consumer confidence: ${pct(state.population?.consumerConfidence ?? 0)} · Regime: ${regime}`;
+        const sectors = state.leaderboards?.sectors ?? [];
+        const countries = state.leaderboards?.countries ?? [];
+        const alerts = state.alerts ?? [];
+        $("mSectorLeaders").innerHTML = sectors.length
+          ? sectors.slice(0, 5).map((sector) => `
+              <div class="leader-row">
+                <div>
+                  <div style="font-weight:700">${sector.name}</div>
+                  <div class="tiny">${sector.members} members · leader ${sector.leader?.ticker ?? "--"}</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-weight:700;color:${tone(sector.avgMovePct ?? 0)}">${sector.avgMovePct >= 0 ? "+" : ""}${n(sector.avgMovePct ?? 0, 2)}%</div>
+                  <div class="tiny">Score ${n(sector.compositeScore ?? 0, 1)}</div>
+                </div>
+              </div>`).join("")
+          : "<div class='tiny'>Waiting for sector data.</div>";
+        $("mCountryLeaders").innerHTML = countries.length
+          ? countries.slice(0, 5).map((country) => `
+              <div class="leader-row">
+                <div>
+                  <div style="font-weight:700">${country.name}</div>
+                  <div class="tiny">${country.members} companies · leader ${country.leader?.ticker ?? "--"}</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-weight:700;color:${tone(country.avgMovePct ?? 0)}">${country.avgMovePct >= 0 ? "+" : ""}${n(country.avgMovePct ?? 0, 2)}%</div>
+                  <div class="tiny">Cap ${fmtBig(country.marketCap ?? 0)}</div>
+                </div>
+              </div>`).join("")
+          : "<div class='tiny'>Waiting for country data.</div>";
+        $("mAlertTape").innerHTML = alerts.length
+          ? alerts.slice(0, 4).map((alert) => `
+              <div class="alert-row">
+                <div>
+                  <div style="font-weight:700">${alert.title}</div>
+                  <div class="tiny">${String(alert.category ?? "market").toUpperCase()}</div>
+                </div>
+                <div style="text-align:right;color:${progressColor(alert.severity === "critical" ? 100 : alert.severity === "high" ? 70 : alert.severity === "medium" ? 40 : 20)}">
+                  ${String(alert.severity ?? "low").toUpperCase()}
+                </div>
+              </div>`).join("")
+          : "<div class='tiny'>No urgent alerts.</div>";
 
         const sorted = (stocks).slice().sort((a, b) => b.marketCap - a.marketCap);
         $("marketsGrid").innerHTML = sorted.map((s) => {
@@ -1438,6 +1691,23 @@
               <div class="meter-val" style="color:${m.color}">${pctVal}%</div>
             </div>`;
         }).join("");
+        const intel = co?.intelligence ?? {};
+        $("cIntel").innerHTML = [
+          { label: "Composite", value: n(intel.compositeScore ?? 0, 1), color: "var(--accent)" },
+          { label: "Quality", value: n(intel.qualityScore ?? 0, 1), color: "var(--up)" },
+          { label: "Momentum", value: n(intel.momentumScore ?? 0, 1), color: tone(intel.dayMovePct ?? 0) },
+          { label: "Resilience", value: n(intel.resilienceScore ?? 0, 1), color: "var(--text)" },
+          { label: "Valuation", value: n(intel.valuationScore ?? 0, 1), color: "var(--warn)" },
+          { label: "Risk", value: `${intel.riskLevel ?? "Low"} · ${n(intel.riskScore ?? 0, 1)}`, color: progressColor(intel.riskScore ?? 0) }
+        ]
+          .map(
+            (item) => `
+            <div class="insight-card">
+              <div class="insight-label">${item.label}</div>
+              <div class="insight-value" style="font-size:16px;color:${item.color}">${item.value}</div>
+            </div>`
+          )
+          .join("");
 
         // pressure
         const bp = sel.buyPressure ?? 0.5;
@@ -1490,6 +1760,17 @@
             <div><span class="tiny">Float Shares</span><br><b>${n(co?.publicFloatShares ?? sel.publicFloatShares ?? 0, 0)}</b></div>
             <div><span class="tiny">Founder</span><br><b>${co?.principalHolder ?? "--"}</b></div>
           </div>`;
+        $("cSignals").innerHTML = (intel.signals ?? []).length
+          ? `<div class="signals-grid">${intel.signals
+              .map(
+                (signal, index) => `
+                <div class="signal-card">
+                  <div class="leader-label">Signal ${index + 1}</div>
+                  <div style="font-size:12px;line-height:1.45">${signal}</div>
+                </div>`
+              )
+              .join("")}</div>`
+          : "<div class='tiny'>No active catalysts detected.</div>";
 
         // mini chart
         const cc = $("cChart");
@@ -1601,6 +1882,44 @@
           <div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12px">
             <span style="color:var(--muted);font-size:10px">Tick ${h.tick}</span><br>${h.headline}
           </div>`).join("") || "<div class='tiny'>No events yet</div>";
+        $("eAlerts").innerHTML = renderAlertList((state.alerts ?? []).slice(0, 5), "Macro and volatility alerts will show here.");
+        const supplyRisk = state.analytics?.supplyRisk ?? {};
+        $("eSupplyRegions").innerHTML = (supplyRisk.regions ?? []).length
+          ? supplyRisk.regions.slice(0, 6).map((region) => `
+              <div class="heat-cell">
+                <div style="font-weight:700">${region.regionId.replaceAll("_", " ")}</div>
+                <div class="tiny">${region.resource} · ${region.severity}</div>
+                <div class="heat-bar"><div class="heat-fill" style="width:${region.vulnerabilityPct}%;background:${progressColor(region.vulnerabilityPct)}"></div></div>
+                <div class="tiny" style="margin-top:6px">Risk ${n(region.vulnerabilityPct, 1)}% · Disruption ${n(region.disruptionPct, 1)}%</div>
+              </div>`).join("")
+          : "<div class='tiny'>No supply region diagnostics yet.</div>";
+        $("eSupplyRoutes").innerHTML = (supplyRisk.routes ?? []).length
+          ? supplyRisk.routes.slice(0, 6).map((route) => `
+              <div class="route-card" style="margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;gap:10px">
+                  <div>
+                    <div style="font-weight:700">${route.from} → ${route.to}</div>
+                    <div class="tiny">${route.id} · ${route.status}</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-weight:700;color:${progressColor(route.vulnerabilityPct)}">${n(route.vulnerabilityPct, 1)}%</div>
+                    <div class="tiny">cap ${n(route.capacityPct, 1)}%</div>
+                  </div>
+                </div>
+                <div class="route-bar"><div class="route-fill" style="width:${route.vulnerabilityPct}%;background:${progressColor(route.vulnerabilityPct)}"></div></div>
+                <div class="tiny" style="margin-top:6px">Delay ${n(route.delayPct, 1)}% · Capacity ${n(route.capacityPct, 1)}%</div>
+              </div>`).join("")
+          : "<div class='tiny'>No route diagnostics yet.</div>";
+        $("eTradeTape").innerHTML = (state.player?.trades ?? []).length
+          ? state.player.trades.slice(-8).reverse().map((trade) => `
+              <div class="commodity-row">
+                <span>${trade.side === "buy" ? "▲ Buy" : "▼ Sell"} · ${trade.companyId}</span>
+                <span style="color:${trade.side === "buy" ? "var(--up)" : "var(--down)"}">${n(trade.quantity ?? 0, 0)} @ $${n(trade.price ?? 0, 4)}</span>
+              </div>
+              <div class="tiny" style="margin:-3px 0 8px 0;color:var(--muted)">
+                Tick ${trade.tick ?? "--"} · Realized ${fmtBig(trade.realizedPnlDelta ?? 0)}
+              </div>`).join("")
+          : "<div class='tiny'>Trade history will populate after your first fill.</div>";
 
         const richest = state.leaderboards?.richest ?? [];
         $("eRichest").innerHTML = richest.slice(0, 25).map((r, i) => `
@@ -1629,7 +1948,7 @@
           $("indexPill").className = `pill ${idx.changePct >= 0 ? "up" : "down"}`;
         }
         $("participantPill").textContent = `${n(state.population?.count ?? 0, 0)} participants`;
-        $("balancePill").textContent = `Wallet ${fmtBig(state.player?.cash ?? 0)}`;
+        $("balancePill").textContent = `Wallet ${fmtBig(state.player?.cash ?? 0)} · PnL ${fmtBig(state.player?.analytics?.totalPnl ?? 0)}`;
         $("rankPill").textContent = `Rank #${n(state.player?.rank ?? 0, 0)} · Net ${fmtBig(state.player?.netWorth ?? 0)}`;
 
         // news
@@ -1638,6 +1957,19 @@
           const text = headlines.slice(0, 12).map((h) => `<span class="news-item">📰 ${h.headline}</span>`).join("");
           $("newsTicker").innerHTML = `${text}${text}`;
         }
+        $("toastStack").innerHTML = (state.alerts ?? [])
+          .slice(0, 3)
+          .map(
+            (alert) => `
+            <div class="toast ${severityClass(alert.severity)}">
+              <div style="display:flex;justify-content:space-between;gap:8px">
+                <strong>${alert.title}</strong>
+                <span class="severity-badge ${severityClass(alert.severity)}">${alert.severity}</span>
+              </div>
+              <span class="tiny">${alert.detail ?? ""}</span>
+            </div>`
+          )
+          .join("");
 
         const activePage = document.querySelector(".tab.active")?.dataset?.tab ?? "trading";
         if (activePage === "trading") renderTrading(state);

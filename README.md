@@ -44,6 +44,16 @@ This repository now contains an executable V10 foundation for a realistic global
   - Day/night market session cycle where 1 stock day = 5 real minutes
   - Stock trade form supporting both limit and market orders
   - Wallet cash updates immediately after player trades
+  - Real-time alert toasts for macro, volatility, and route-risk events
+  - Portfolio intelligence card with realized/unrealized P&L, exposure, and win-rate stats
+  - Market leadership panels for sector/country rankings plus live alert tape
+  - Company intelligence scorecards with composite scoring and catalyst/risk signals
+  - Supply-chain heat map, route diagnostics, and player trade tape on the economy page
+- Analytics layer
+  - Player trade ledger with cost-basis, realized P&L, unrealized P&L, turnover, and exposure breakdowns
+  - Sector and country leaderboards with composite leadership scores
+  - Supply risk scoring for regions and trade routes
+  - Alert engine for macro stress, logistics disruption, news shocks, and high-volatility moves
 - Automated tests for determinism, matching behavior, bounded indicators, event coupling, and mergers
 
 ## Project Structure
@@ -101,6 +111,12 @@ npm run simulate
 
 - `GET /api/state` — current snapshot
 - `GET /api/stream` — realtime event stream (SSE)
+- `GET /api/alerts` — current high-priority alert list
+- `GET /api/player/analytics` — player holdings, trade tape, and portfolio analytics
+- `GET /api/rankings/sectors` — sector leadership table
+- `GET /api/rankings/countries` — country leadership table
+- `GET /api/supply-risk` — supply region heat-map and route diagnostics
+- `GET /api/company/intelligence?companyId=<id>` — derived company scorecard and signals
 - `POST /api/company` — create company
 - `POST /api/order` — place order
 - `POST /api/tick` — run one tick with optional events
