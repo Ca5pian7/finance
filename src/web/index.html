@@ -706,7 +706,55 @@
             <button class="btn-buy" id="btnBuy" style="flex:1;padding:8px">▲ Buy</button>
             <button class="btn-sell" id="btnSell" style="flex:1;padding:8px">▼ Sell</button>
           </div>
+          <div class="trade-row" style="margin-top:6px">
+            <button id="btnSquareOff" style="width:100%;padding:8px;border:1px solid var(--line);background:#1a2f50;color:var(--text);font-weight:700;cursor:pointer">
+              ⟲ Square Off Selected Position
+            </button>
+          </div>
           <div class="status-msg" id="tradeStatus"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Build Your Company</div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <input id="newCompanyName" type="text" placeholder="Company name" style="flex:1" />
+            <input id="newCompanyValuation" type="number" min="1000000" step="1000000" value="500000000" style="flex:1" />
+          </div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <input id="newCompanyCountry" type="text" placeholder="Country (e.g. USA)" value="USA" style="flex:1" />
+            <input id="newCompanySector" type="text" placeholder="Sector (e.g. AI)" value="AI" style="flex:1" />
+          </div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <input id="newCompanyModel" type="text" placeholder="Business model" value="SaaS" style="flex:1" />
+            <input id="newCompanyEmployees" type="number" min="10" step="10" value="500" style="flex:1" />
+          </div>
+          <button id="btnCreateCompany" style="width:100%;padding:8px;border:0;background:linear-gradient(120deg,#20558f,#64a9ff);color:white;font-weight:700;cursor:pointer">
+            + Create Company
+          </button>
+          <div class="status-msg" id="companyCreateStatus"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Business Actions</div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <select id="actionCompany" style="flex:1"></select>
+            <select id="actionType" style="flex:1">
+              <option value="LAUNCH_PRODUCT">Launch Product</option>
+              <option value="RAISE_VENTURE_CAPITAL">Raise Venture Capital</option>
+              <option value="BUILD_FACTORY">Build Factory</option>
+              <option value="MANAGE_LOGISTICS">Manage Logistics</option>
+              <option value="CREATE_MONOPOLY">Compete Aggressively</option>
+              <option value="ACQUIRE_COMPETITOR">Merge / Acquire Competitor</option>
+            </select>
+          </div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <select id="actionTarget" style="flex:1"></select>
+            <input id="actionIntensity" type="number" min="0.5" max="5" step="0.1" value="1" style="flex:1" />
+          </div>
+          <button id="btnRunAction" style="width:100%;padding:8px;border:0;background:linear-gradient(120deg,#5b2c94,#b88cff);color:white;font-weight:700;cursor:pointer">
+            Run Business Action
+          </button>
+          <div class="status-msg" id="actionStatus"></div>
         </div>
 
         <div class="card" style="max-height:220px;overflow:auto">
@@ -1375,6 +1423,20 @@
           $("tradeCompany").innerHTML = opts;
           if (selectedCompanyId) $("tradeCompany").value = selectedCompanyId;
         }
+        const sameActionCompanyOpts = $("actionCompany").innerHTML === opts;
+        if (!sameActionCompanyOpts) {
+          $("actionCompany").innerHTML = opts;
+        }
+        if (selectedCompanyId) {
+          $("tradeCompany").value = selectedCompanyId;
+          $("actionCompany").value = selectedCompanyId;
+        }
+        const actionCompanyId = $("actionCompany").value || selectedCompanyId;
+        const actionTargetOptions = stocks
+          .filter((s) => s.companyId !== actionCompanyId)
+          .map((s) => `<option value="${s.companyId}">${s.ticker} – ${s.companyName}</option>`)
+          .join("");
+        $("actionTarget").innerHTML = actionTargetOptions || "<option value=''>No target</option>";
 
         if (chartAsset) {
           const chg = dayPriceChange(chartAsset);
@@ -1460,8 +1522,10 @@
             const stock = stocks.find((s) => s.companyId === companyId);
             if (!stock || qty === 0) return null;
             const isShort = qty < 0;
-            const stakeBaseShares = isShort ? Math.max(1, stock.publicFloatShares ?? stock.sharesOutstanding ?? 1) : Math.max(1, stock.sharesOutstanding ?? 1);
+            const stakeBaseShares = Math.max(1, Number(stock.sharesOutstanding ?? 1));
             const stakePct = Math.max(0, Math.min(100, (Math.abs(qty) / stakeBaseShares) * 100));
+            const floatBaseShares = Math.max(1, Number(stock.publicFloatShares ?? stakeBaseShares));
+            const floatControlPct = Math.max(0, Math.min(100, (Math.abs(qty) / floatBaseShares) * 100));
             const value = qty * stock.lastPrice;
             return {
               companyId,
@@ -1470,6 +1534,7 @@
               qty,
               value,
               stakePct,
+              floatControlPct,
               isShort
             };
           })
@@ -1501,10 +1566,16 @@
               <span style="color:${row.value >= 0 ? "var(--up)" : "var(--down)"}">${fmtBig(row.value)}</span>
             </div>
             <div class="tiny" style="margin:-3px 0 6px 0;color:var(--muted)">
-              ${row.companyName} · ${row.isShort ? "Borrowed Short Exposure" : "Your Stake"} ${n(row.stakePct, 4)}%
+              ${row.companyName} · ${row.isShort ? "Borrowed Short Exposure" : "Total Ownership"} ${n(row.stakePct, 4)}% · Float Control ${n(row.floatControlPct, 4)}%
             </div>
           `).join("")
           : "<div class='tiny'>Trade stock to see your portfolio positions here.</div>";
+
+        const selectedHolding = Number(holdings[$("tradeCompany").value] ?? 0);
+        $("btnSquareOff").disabled = !selectedHolding;
+        $("btnSquareOff").textContent = selectedHolding
+          ? `⟲ Square Off ${n(Math.abs(selectedHolding), 0)} share${Math.abs(selectedHolding) === 1 ? "" : "s"}`
+          : "⟲ Square Off Selected Position";
 
         renderMarketIdeas(state);
       }
@@ -1755,8 +1826,8 @@
             <div><span class="tiny">Public Float</span><br><b>${n(co?.publicFloatPct ?? 0, 2)}%</b></div>
             <div><span class="tiny">Short Interest</span><br><b>${pct(sel.shortInterest ?? 0)}</b></div>
             <div><span class="tiny">Political Influence</span><br><b>${pct(co?.politicalInfluence ?? 0)}</b></div>
-            <div><span class="tiny">Support</span><br><b>$${n(sel.support ?? 0, 4)}</b></div>
-            <div><span class="tiny">Resistance</span><br><b>$${n(sel.resistance ?? 0, 4)}</b></div>
+            <div><span class="tiny">Shares Outstanding</span><br><b>${n(sel.sharesOutstanding ?? 0, 0)}</b></div>
+            <div><span class="tiny">Float Coverage</span><br><b>${n(((co?.publicFloatShares ?? sel.publicFloatShares ?? 0) / Math.max(1, sel.sharesOutstanding ?? 1)) * 100, 2)}%</b></div>
             <div><span class="tiny">Float Shares</span><br><b>${n(co?.publicFloatShares ?? sel.publicFloatShares ?? 0, 0)}</b></div>
             <div><span class="tiny">Founder</span><br><b>${co?.principalHolder ?? "--"}</b></div>
           </div>`;
@@ -1993,6 +2064,10 @@
       $("tradeType").addEventListener("change", () => {
         $("tradePrice").disabled = $("tradeType").value === "market";
       });
+      $("tradeCompany").addEventListener("change", () => {
+        selectedCompanyId = $("tradeCompany").value;
+        if (latestState) renderAll(latestState);
+      });
 
       async function postOrder(side) {
         const status = $("tradeStatus");
@@ -2016,8 +2091,91 @@
         }
       }
 
+      async function squareOffSelectedPosition() {
+        const status = $("tradeStatus");
+        try {
+          const companyId = $("tradeCompany").value;
+          const res = await fetch("/api/order/square-off", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ companyId, traderId: "player" })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Square-off failed");
+          status.style.color = "#8dc7ff";
+          status.textContent = `⟲ Position squared off · ${data.trades?.length ?? 0} fill(s) · Wallet ${fmtBig(data.player?.cash ?? 0)}`;
+        } catch (err) {
+          status.style.color = "#ff92aa";
+          status.textContent = err.message;
+        }
+      }
+
+      async function createCompanyFromForm() {
+        const status = $("companyCreateStatus");
+        try {
+          const payload = {
+            name: $("newCompanyName").value?.trim(),
+            initialValuation: Number($("newCompanyValuation").value || 0),
+            country: $("newCompanyCountry").value?.trim() || "USA",
+            sector: $("newCompanySector").value?.trim() || "AI",
+            businessModel: $("newCompanyModel").value?.trim() || "SaaS",
+            employees: Number($("newCompanyEmployees").value || 500)
+          };
+          if (!payload.name) throw new Error("Company name is required");
+          const res = await fetch("/api/company", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Company creation failed");
+          status.style.color = "#8dc7ff";
+          status.textContent = `Created ${data.name} (${data.stock?.ticker ?? "--"})`;
+          $("newCompanyName").value = "";
+          selectedCompanyId = data.id;
+          $("tradeCompany").value = data.id;
+        } catch (err) {
+          status.style.color = "#ff92aa";
+          status.textContent = err.message;
+        }
+      }
+
+      async function runBusinessAction() {
+        const status = $("actionStatus");
+        try {
+          const actionType = $("actionType").value;
+          const companyId = $("actionCompany").value;
+          const intensity = Number($("actionIntensity").value || 1);
+          const payload = { actionType, companyId, intensity };
+          if (actionType === "ACQUIRE_COMPETITOR") {
+            payload.buyerId = companyId;
+            payload.targetId = $("actionTarget").value;
+            if (!payload.targetId) throw new Error("Select a competitor to acquire");
+          }
+          const res = await fetch("/api/action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Action failed");
+          status.style.color = "#8dc7ff";
+          status.textContent = `${actionType.replaceAll("_", " ")} executed`;
+        } catch (err) {
+          status.style.color = "#ff92aa";
+          status.textContent = err.message;
+        }
+      }
+
       $("btnBuy").addEventListener("click", () => postOrder("buy"));
       $("btnSell").addEventListener("click", () => postOrder("sell"));
+      $("btnSquareOff").addEventListener("click", squareOffSelectedPosition);
+      $("btnCreateCompany").addEventListener("click", createCompanyFromForm);
+      $("btnRunAction").addEventListener("click", runBusinessAction);
+      $("actionCompany").addEventListener("change", () => {
+        if (!latestState) return;
+        renderTrading(latestState);
+      });
 
       /* ── SSE ── */
       const stream = new EventSource("/api/stream");

@@ -156,6 +156,47 @@ function getPublicFloatShares(stock) {
   return Math.max(1, Number(stock?.sharesOutstanding ?? 0));
 }
 
+function normalizeStockStructure(company, stock) {
+  if (!stock) return;
+  const fallbackOutstanding = Math.max(1, Number(company?.stock?.sharesOutstanding ?? 100_000_000));
+  const outstanding = Number(stock.sharesOutstanding);
+  stock.sharesOutstanding = Number.isFinite(outstanding) && outstanding > 0 ? Math.round(outstanding) : fallbackOutstanding;
+
+  const configuredFloat = Number(stock.publicFloatShares);
+  let publicFloatShares = Number.isFinite(configuredFloat) && configuredFloat > 0 ? configuredFloat : null;
+  if (!publicFloatShares && company?.ownership?.publicFloatShares) {
+    publicFloatShares = Number(company.ownership.publicFloatShares);
+  }
+  if (!publicFloatShares) {
+    const fallbackPublicPct = Number.isFinite(Number(company?.ownership?.publicFloatPct))
+      ? Number(company.ownership.publicFloatPct) / 100
+      : 0.38;
+    publicFloatShares = stock.sharesOutstanding * bounded(fallbackPublicPct, 0.01, 1);
+  }
+  stock.publicFloatShares = bounded(Math.round(publicFloatShares), 1, stock.sharesOutstanding);
+
+  if (company) {
+    company.ownership = company.ownership ?? {};
+    const principalShares = bounded(stock.sharesOutstanding - stock.publicFloatShares, 0, stock.sharesOutstanding);
+    const principalStakePct = bounded((principalShares / Math.max(1, stock.sharesOutstanding)) * 100, 0, 100);
+    company.ownership.principalShares = principalShares;
+    company.ownership.publicFloatShares = stock.publicFloatShares;
+    company.ownership.principalStakePct = Number(principalStakePct.toFixed(4));
+    company.ownership.publicFloatPct = Number((100 - principalStakePct).toFixed(4));
+    if (!company.ownership.principalHolder) {
+      company.ownership.principalHolder = `${company.name ?? company.id ?? "Founder"} Founder`;
+    }
+  }
+}
+
+function getMarketOrderPrice(book, side, fallbackPrice) {
+  const opposite = side === "buy" ? book.sell : book.buy;
+  const topOpposite = opposite?.length ? opposite[0] : null;
+  const bestOppositePrice = Number(topOpposite?.price);
+  if (Number.isFinite(bestOppositePrice) && bestOppositePrice > 0) return bestOppositePrice;
+  return Math.max(0.0001, Number(fallbackPrice ?? 0.1));
+}
+
 function syncStockDerivedMetrics(stock, company) {
   stock.marketCap = Number((stock.lastPrice * stock.sharesOutstanding).toFixed(2));
   stock.peRatio = calculatePeRatio({
@@ -238,15 +279,20 @@ export function placeOrder(state, order) {
   const quantity = Number(order.quantity);
   if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Invalid order quantity");
   const stock = state.stocks[order.companyId];
+  normalizeStockStructure(state.companies?.[order.companyId], stock);
   if (quantity > stock.sharesOutstanding) throw new Error("Order exceeds available company shares");
   const orderType = order.orderType === "market" ? "market" : "limit";
   let price = Number(order.price);
+  const isPlayer = order.traderId === "player";
+  if (isPlayer && orderType === "market") {
+    const oppositeSide = order.side === "buy" ? "sell" : "buy";
+    if (!book[oppositeSide].length) seedMarketLiquidity(state, order.companyId);
+  }
   if (orderType === "market") {
-    const aggressive = order.side === "buy" ? 1.5 : 0.5;
-    price = Number(Math.max(0.0001, stock.lastPrice * aggressive).toFixed(4));
+    price = Number(getMarketOrderPrice(book, order.side, stock.lastPrice).toFixed(4));
   }
   if (!Number.isFinite(price) || price <= 0) throw new Error("Invalid order price");
-  if (order.traderId === "player") {
+  if (isPlayer) {
     const estimatedNotional = quantity * price;
     const currentShares = getPlayerHoldingShares(state, order.companyId);
     const publicFloatShares = getPublicFloatShares(stock);
@@ -267,8 +313,6 @@ export function placeOrder(state, order) {
         throw new Error("Insufficient borrow availability to short");
       }
     }
-    const oppositeSide = order.side === "buy" ? "sell" : "buy";
-    if (!book[oppositeSide].length) seedMarketLiquidity(state, order.companyId);
   }
   book[order.side].push({
     id: `${state.tick}-${book[order.side].length + 1}-${order.side}`,
@@ -280,6 +324,22 @@ export function placeOrder(state, order) {
     timestamp: Date.now()
   });
   return matchOrderBook(state, order.companyId);
+}
+
+export function squareOffPosition(state, { companyId, traderId = "player" } = {}) {
+  if (traderId !== "player") throw new Error("Only player square-off is supported");
+  if (!companyId) throw new Error("companyId is required");
+  const stock = state.stocks?.[companyId];
+  if (!stock) throw new Error("Unknown company");
+  const holdingShares = getPlayerHoldingShares(state, companyId);
+  if (!holdingShares) throw new Error("No open position to square off");
+  return placeOrder(state, {
+    companyId,
+    side: holdingShares > 0 ? "sell" : "buy",
+    orderType: "market",
+    quantity: Math.abs(holdingShares),
+    traderId
+  });
 }
 
 export function matchOrderBook(state, companyId) {
@@ -549,12 +609,6 @@ function updateCompany(state, companyId, rng) {
   const nextPrice = Math.max(0.1, stock.lastPrice * (1 + bounded(baseReturn, -weightedMaxMove * 1.5, weightedMaxMove * 1.5)));
   let clamped = bounded(nextPrice, stock.lastPrice * (1 - weightedMaxMove), stock.lastPrice * (1 + weightedMaxMove));
   clamped = applyBarrierClamp(stock, clamped, crowd.pressureGap + (stock.newsMomentum ?? 0));
-  const dayAnchor = Math.max(0.1, Number(stock.dayOpenPrice ?? stock.lastPrice ?? 0.1));
-  const upCap = bounded(0.1 + Math.max(0, stock.newsMomentum ?? 0) * 0.24, 0.1, 0.36);
-  const downCap = bounded(0.1 + Math.max(0, -(stock.newsMomentum ?? 0)) * 0.2, 0.1, 0.3);
-  const dayUpper = dayAnchor * (1 + upCap);
-  const dayLower = dayAnchor * (1 - downCap);
-  clamped = bounded(clamped, dayLower, dayUpper);
   stock.halted = false;
   stock.lastPrice = Number(clamped.toFixed(4));
   touchDayRange(stock, stock.lastPrice);
@@ -986,6 +1040,7 @@ export function runTick(state, { events = [] } = {}) {
     if (!state.orderBooks[companyId]) state.orderBooks[companyId] = { buy: [], sell: [] };
     if (!state.stocks[companyId]) continue;
     const stock = state.stocks[companyId];
+    normalizeStockStructure(state.companies?.[companyId], stock);
     if (!Number.isFinite(stock.supportStrength)) stock.supportStrength = 0.72;
     if (!Number.isFinite(stock.resistanceStrength)) stock.resistanceStrength = 0.72;
     if (!Number.isFinite(stock.supportBreakPressure)) stock.supportBreakPressure = 0;
