@@ -48,6 +48,9 @@ This repository now contains an executable V10 foundation for a realistic global
   - Day/night market session cycle where 1 stock day = 5 real minutes
   - Stock trade form supporting both limit and market orders
   - Trade-assistant panel explaining buy/sell/square-off mechanics with live position-impact previews
+  - Smart trade tools with quick quantity presets, max-buy helper, close-size helper, and one-click limit-at-market prefill
+  - Optional keyboard shortcuts for faster execution (buy, sell, square-off, max-buy helper)
+  - Persistent watchlist panel (local browser storage) with focus/remove controls and watchlist highlights in stock list
   - Scrollable right-side trading controls so company creation/actions remain reachable on smaller viewports
   - Wallet cash updates immediately after player trades
   - Real-time alert toasts for macro, volatility, and route-risk events
