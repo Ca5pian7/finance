@@ -8,6 +8,7 @@ const NEUTRAL_RATE = 0.03;
 const MARKET_MAKER_BUY_ID = "market-maker-buy";
 const MARKET_MAKER_SELL_ID = "market-maker-sell";
 const STOCK_DAY_INTERVAL_MINUTES = 1440;
+const NASDAQ_SECTORS = new Set(["AI", "Cloud Computing", "Semiconductor", "Robotics", "EV", "Social Media", "Gaming", "Crypto", "Space"]);
 
 function bounded(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -30,6 +31,20 @@ function pushHeadline(state, headline, impact = 0) {
 
 function asPct(value) {
   return Number((value * 100).toFixed(2));
+}
+
+function resolveMarketRegime(state, rng) {
+  const score =
+    state.sentiment * 1.3 +
+    state.macro.gdpGrowth * 6 -
+    state.macro.inflation * 4.2 -
+    state.macro.unemployment * 2.2 -
+    state.geopolitics.tension * 1.7 -
+    state.supplyChains.pressure * 1.5 +
+    (rng() - 0.5) * 0.34;
+  if (score >= 0.24) return "rally";
+  if (score <= -0.24) return "down";
+  return "stable";
 }
 
 function touchDayRange(stock, price) {
@@ -280,7 +295,10 @@ export function matchOrderBook(state, companyId) {
     const participation = bounded(quantity / Math.max(1, stock.sharesOutstanding), 0, 1);
     const liquidityReference = Math.max(1, (stock.marketCap ?? 0) * 0.0009);
     const notionalParticipation = bounded(tradeNotional / liquidityReference, 0, 1);
-    const impactPct = Math.min(0.045, Math.sqrt(participation) * 0.08 + Math.sqrt(notionalParticipation) * 0.03);
+    const tradeScale = bounded(Math.pow(tradeNotional / Math.max(1, stock.marketCap * 0.0002), 0.62), 0.08, 1.15);
+    const participationCore = Math.pow(participation, 0.6) * 0.05;
+    const notionalCore = Math.pow(notionalParticipation, 0.65) * 0.022;
+    const impactPct = Math.min(0.042, (participationCore + notionalCore) * tradeScale);
     const buyInitiated = bid.timestamp >= ask.timestamp;
     const impactedPrice = rawPrice * (1 + (buyInitiated ? impactPct : -impactPct));
 
@@ -308,7 +326,8 @@ export function matchOrderBook(state, companyId) {
         0,
         1
       );
-      const valuationBlend = bounded(0.002 + participation * 0.06 + valuationSensitivity * 0.038, 0.002, 0.08);
+      const valuationTradeScale = bounded(tradeNotional / Math.max(1, company.valuation * 0.0015), 0, 1);
+      const valuationBlend = bounded(0.0001 + participation * 0.03 + valuationSensitivity * 0.022 + valuationTradeScale * 0.018, 0.0001, 0.06);
       company.valuation = Number((company.valuation * (1 - valuationBlend) + stock.marketCap * valuationBlend).toFixed(2));
     }
 
@@ -509,6 +528,8 @@ function updateCompany(state, companyId, rng) {
   const random = (rng() - 0.5) * 0.007;
   const baseReturn = fundamentalReturn + macroReturn + meanReversion + crowdReturn + supportBounce - resistanceDrag - downsidePressure * 0.018 + newsReturn + random;
   const newsMagnitude = Math.abs(stock.newsMomentum ?? 0);
+  const regime = state.marketRegime ?? "stable";
+  const regimeVolatilityMultiplier = regime === "rally" ? 1.02 : regime === "down" ? 1.12 : 0.86;
   const maxMove = bounded(
     0.006 +
       (1 - stock.stability) * 0.017 +
@@ -519,7 +540,7 @@ function updateCompany(state, companyId, rng) {
     0.004,
     0.04
   );
-  const weightedMaxMove = bounded(maxMove * movementProfile.volatility, 0.003, 0.055);
+  const weightedMaxMove = bounded(maxMove * movementProfile.volatility * regimeVolatilityMultiplier, 0.0024, 0.052);
   const nextPrice = Math.max(0.1, stock.lastPrice * (1 + bounded(baseReturn, -weightedMaxMove * 1.5, weightedMaxMove * 1.5)));
   let clamped = bounded(nextPrice, stock.lastPrice * (1 - weightedMaxMove), stock.lastPrice * (1 + weightedMaxMove));
   clamped = applyBarrierClamp(stock, clamped, crowd.pressureGap + (stock.newsMomentum ?? 0));
@@ -544,8 +565,9 @@ function updateCompany(state, companyId, rng) {
 function simulateCrowdFlow(state, company, stock, rng) {
   const participants = state.population.participantCount ?? 10_000_000;
   const companyCount = Math.max(1, Object.keys(state.companies).length);
+  const regimeShift = state.marketRegime === "rally" ? 0.06 : state.marketRegime === "down" ? -0.06 : 0;
   const sentimentBias = bounded(
-    0.5 + state.sentiment * 0.18 + (company.reputation - 0.5) * 0.1 - state.geopolitics.tension * 0.06,
+    0.5 + state.sentiment * 0.18 + (company.reputation - 0.5) * 0.1 - state.geopolitics.tension * 0.06 + regimeShift,
     0.2,
     0.8
   );
@@ -601,12 +623,18 @@ function updateFundsAndIndexes(state, rng) {
   const stocks = Object.values(state.stocks).filter((s) => s.listed);
   if (!stocks.length) return;
 
-  const sortedByCap = stocks.slice().sort((a, b) => b.marketCap - a.marketCap);
+  const sortedByCap = Object.entries(state.stocks)
+    .filter(([, stock]) => stock.listed)
+    .map(([companyId, stock]) => ({ ...stock, companyId }))
+    .sort((a, b) => b.marketCap - a.marketCap);
   const top50 = sortedByCap.slice(0, 50);
   const top100 = sortedByCap.slice(0, 100);
+  const nasdaqUniverse = sortedByCap.filter((stock) => NASDAQ_SECTORS.has(state.companies[stock.companyId]?.sector));
+  const nasdaq100 = (nasdaqUniverse.length ? nasdaqUniverse : sortedByCap).slice(0, 100);
   const allMarketCapNow = stocks.reduce((sum, s) => sum + Math.max(1, Number(s.marketCap ?? 0)), 0);
   const top50MarketCapNow = top50.reduce((sum, s) => sum + Math.max(1, Number(s.marketCap ?? 0)), 0);
   const topMarketCapNow = top100.reduce((sum, s) => sum + Math.max(1, Number(s.marketCap ?? 0)), 0);
+  const nasdaqMarketCapNow = nasdaq100.reduce((sum, s) => sum + Math.max(1, Number(s.marketCap ?? 0)), 0);
 
   if (!Number.isFinite(state.indexes.GLOBAL_ALL?.baseMarketCap) || state.indexes.GLOBAL_ALL.baseMarketCap <= 0) {
     state.indexes.GLOBAL_ALL.baseMarketCap = allMarketCapNow;
@@ -616,6 +644,9 @@ function updateFundsAndIndexes(state, rng) {
   }
   if (!Number.isFinite(state.indexes.GLOBAL50?.baseMarketCap) || state.indexes.GLOBAL50.baseMarketCap <= 0) {
     state.indexes.GLOBAL50.baseMarketCap = top50MarketCapNow;
+  }
+  if (!Number.isFinite(state.indexes.NASDAQ100?.baseMarketCap) || state.indexes.NASDAQ100.baseMarketCap <= 0) {
+    state.indexes.NASDAQ100.baseMarketCap = nasdaqMarketCapNow;
   }
 
   const allPrev = Number(state.indexes.GLOBAL_ALL?.value ?? 1000);
@@ -647,6 +678,26 @@ function updateFundsAndIndexes(state, rng) {
     ticker: s.ticker,
     weightPct: Number(((Math.max(1, Number(s.marketCap ?? 0)) / Math.max(1, top50MarketCapNow)) * 100).toFixed(4))
   }));
+
+  const nasdaqPrev = Number(state.indexes.NASDAQ100?.value ?? 1000);
+  const nasdaqTarget = 1000 * (nasdaqMarketCapNow / Math.max(1, state.indexes.NASDAQ100.baseMarketCap));
+  state.indexes.NASDAQ100.value = Number((nasdaqPrev + (nasdaqTarget - nasdaqPrev) * 0.12).toFixed(2));
+  state.indexes.NASDAQ100.changePct = Number((((state.indexes.NASDAQ100.value - nasdaqPrev) / Math.max(1, nasdaqPrev)) * 100).toFixed(2));
+  state.indexes.NASDAQ100.members = nasdaq100.map((s) => s.ticker);
+  state.indexes.NASDAQ100.weights = nasdaq100.map((s) => ({
+    ticker: s.ticker,
+    weightPct: Number(((Math.max(1, Number(s.marketCap ?? 0)) / Math.max(1, nasdaqMarketCapNow)) * 100).toFixed(4))
+  }));
+  const nasdaqRange = Math.max(0.0001, Math.abs(state.indexes.NASDAQ100.value - nasdaqPrev));
+  const nasdaqWick = nasdaqRange * (0.25 + rng() * 0.6);
+  const nasdaqOpen = Number(nasdaqPrev.toFixed(2));
+  const nasdaqClose = Number(state.indexes.NASDAQ100.value.toFixed(2));
+  const nasdaqHigh = Number((Math.max(nasdaqOpen, nasdaqClose) + nasdaqWick).toFixed(2));
+  const nasdaqLow = Number(Math.max(1, Math.min(nasdaqOpen, nasdaqClose) - nasdaqWick).toFixed(2));
+  state.indexes.NASDAQ100.candles = [
+    ...(state.indexes.NASDAQ100.candles ?? []),
+    { tick: state.tick, time: state.time, open: nasdaqOpen, high: nasdaqHigh, low: nasdaqLow, close: nasdaqClose, volume: nasdaqMarketCapNow }
+  ].slice(-600);
 
   const macroSignal = state.sentiment - state.macro.inflation - state.geopolitics.tension * 0.5;
   state.funds.institutionalAUM = Math.max(50_000_000_000, Math.round(state.funds.institutionalAUM * (1 + macroSignal * 0.003 + (rng() - 0.5) * 0.002)));
@@ -887,6 +938,11 @@ export function runTick(state, { events = [] } = {}) {
     state.indexes = state.indexes ?? {};
     state.indexes.GLOBAL_ALL = { value: 1000, changePct: 0, members: [] };
   }
+  if (!state.indexes?.NASDAQ100) {
+    state.indexes = state.indexes ?? {};
+    state.indexes.NASDAQ100 = { value: 1000, changePct: 0, members: [], candles: [] };
+  }
+  if (!["rally", "down", "stable"].includes(state.marketRegime)) state.marketRegime = "stable";
   state.tick += 1;
   const ticksPerDay = state.marketSession?.ticksPerDay ?? STOCK_DAY_TICKS;
   state.time = new Date(new Date(state.time).getTime() + SIM_MS_PER_TICK).toISOString();
@@ -902,6 +958,7 @@ export function runTick(state, { events = [] } = {}) {
   for (const event of events) applyEvent(state, event);
   updateCommodities(state, rng);
   updateMacro(state, rng);
+  state.marketRegime = resolveMarketRegime(state, rng);
   state.policyPressure = bounded(state.policyPressure * 0.97, 0, 1);
   state.supplyChains.pressure = bounded(state.supplyChains.pressure * 0.985, 0, 1);
   state.geopolitics.tension = bounded(state.geopolitics.tension * 0.992, 0, 1);
@@ -942,7 +999,9 @@ export function runTick(state, { events = [] } = {}) {
       state,
       `Index ${state.indexes.GLOBAL100.value.toFixed(2)} (${state.indexes.GLOBAL100.changePct.toFixed(2)}%) | Global-All ${
         state.indexes.GLOBAL_ALL.value.toFixed(2)
-      } (${state.indexes.GLOBAL_ALL.changePct.toFixed(2)}%) | Supply pressure ${asPct(
+      } (${state.indexes.GLOBAL_ALL.changePct.toFixed(2)}%) | NASDAQ100 ${state.indexes.NASDAQ100.value.toFixed(2)} (${state.indexes.NASDAQ100.changePct.toFixed(
+        2
+      )}%) | ${String(state.marketRegime).toUpperCase()} regime | Supply pressure ${asPct(
         state.supplyChains.pressure
       )}% | Geopolitical tension ${asPct(state.geopolitics.tension)}%`,
       0

@@ -32,6 +32,7 @@ function getSnapshot() {
     macro: state.macro,
     sentiment: state.sentiment,
     policyPressure: state.policyPressure,
+    marketRegime: state.marketRegime,
     headlines: state.headlines.slice(0, 10),
     geopolitics: state.geopolitics,
     supplyChains: state.supplyChains,

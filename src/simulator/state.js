@@ -35,6 +35,7 @@ export function createInitialState({ seed = 42 } = {}) {
     macro: { ...DEFAULT_MACRO },
     sentiment: 0,
     policyPressure: 0,
+    marketRegime: "stable",
     governments,
     commodities: Object.fromEntries(
       Object.entries(COMMODITIES).map(([key, v]) => [key, { price: v.basePrice }])
@@ -64,7 +65,8 @@ export function createInitialState({ seed = 42 } = {}) {
     indexes: {
       GLOBAL100: { value: 1000, changePct: 0, members: [] },
       GLOBAL50: { value: 1000, changePct: 0, members: [] },
-      GLOBAL_ALL: { value: 1000, changePct: 0, members: [] }
+      GLOBAL_ALL: { value: 1000, changePct: 0, members: [] },
+      NASDAQ100: { value: 1000, changePct: 0, members: [], candles: [] }
     },
     leaderboards: {
       companies: [],
@@ -87,16 +89,26 @@ export function createInitialState({ seed = 42 } = {}) {
   };
 }
 
+const FEATURED_COMPANY_CATALOG = [
+  { name: "SpaceX", country: "USA", sector: "Space", businessModel: "Hardware", initialValuation: 180_000_000_000 },
+  { name: "Cisco", country: "USA", sector: "Cloud Computing", businessModel: "B2B", initialValuation: 220_000_000_000 },
+  { name: "T Group", country: "UAE", sector: "Logistics", businessModel: "Hybrid", initialValuation: 95_000_000_000 },
+  { name: "Celestia", country: "USA", sector: "AI", businessModel: "SaaS", initialValuation: 42_000_000_000 },
+  { name: "Neon Grid", country: "Japan", sector: "Semiconductor", businessModel: "Hardware", initialValuation: 28_000_000_000 },
+  { name: "Black Nova", country: "Germany", sector: "Defense", businessModel: "B2B", initialValuation: 33_000_000_000 }
+];
+
 export function createSeedCompanies(state, count = 12) {
   const rng = createRng(state.seed);
   for (let i = 0; i < count; i += 1) {
+    const featured = FEATURED_COMPANY_CATALOG[i];
     const company = createCompany({
       id: `seed-${i + 1}`,
-      name: `${pick(rng, ["Neo", "Quantum", "Prime", "Atlas", "Nova"])}${pick(rng, ["Core", "Wave", "Mind", "Chip", "Grid"])} ${i + 1}`,
-      country: pick(rng, COUNTRIES),
-      sector: pick(rng, SECTORS),
-      businessModel: pick(rng, ["B2B", "B2C", "SaaS", "Hardware", "Hybrid"]),
-      initialValuation: 2_000_000_000 + Math.floor(rng() * 4_000_000_000)
+      name: featured?.name ?? `${pick(rng, ["Neo", "Quantum", "Prime", "Atlas", "Nova"])}${pick(rng, ["Core", "Wave", "Mind", "Chip", "Grid"])} ${i + 1}`,
+      country: featured?.country ?? pick(rng, COUNTRIES),
+      sector: featured?.sector ?? pick(rng, SECTORS),
+      businessModel: featured?.businessModel ?? pick(rng, ["B2B", "B2C", "SaaS", "Hardware", "Hybrid"]),
+      initialValuation: featured?.initialValuation ?? 2_000_000_000 + Math.floor(rng() * 4_000_000_000)
     });
     upsertCompany(state, company);
   }

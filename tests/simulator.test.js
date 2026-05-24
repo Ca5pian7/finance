@@ -379,3 +379,29 @@ test("global 50 index is available and market-cap weighted", () => {
   const weightSum = state.indexes.GLOBAL50.weights.reduce((sum, entry) => sum + Number(entry.weightPct ?? 0), 0);
   assert.ok(weightSum > 99.9 && weightSum < 100.1);
 });
+
+test("nasdaq100 index is available with chart candles", () => {
+  const state = createInitialState({ seed: 114 });
+  for (let i = 0; i < 30; i += 1) {
+    upsertCompany(
+      state,
+      createCompany({
+        id: `ndx-${i}`,
+        name: `Nasdaq Candidate ${i}`,
+        country: "USA",
+        sector: i % 3 === 0 ? "AI" : i % 3 === 1 ? "Cloud Computing" : "Semiconductor",
+        businessModel: "SaaS",
+        initialValuation: 2_000_000_000 + i * 50_000_000
+      })
+    );
+  }
+
+  for (let i = 0; i < 8; i += 1) runTick(state);
+
+  assert.ok(state.indexes.NASDAQ100);
+  assert.ok(state.indexes.NASDAQ100.value > 0);
+  assert.ok(state.indexes.NASDAQ100.members.length > 0);
+  assert.ok(Array.isArray(state.indexes.NASDAQ100.candles));
+  assert.ok(state.indexes.NASDAQ100.candles.length >= 1);
+  assert.ok(Number.isFinite(state.indexes.NASDAQ100.candles.at(-1).close));
+});
