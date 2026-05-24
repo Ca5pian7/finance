@@ -520,6 +520,10 @@
       <div class="chart-panel">
         <div class="chart-header">
           <div class="stock-select-group">
+            <select id="chartMode" style="font-size:13px;font-weight:700;min-width:110px">
+              <option value="stock">Stock</option>
+              <option value="nasdaq100">NASDAQ100</option>
+            </select>
             <select id="chartCompany" style="font-size:13px;font-weight:700;min-width:160px"></select>
             <span class="price-display" id="chartPrice">--</span>
             <span class="price-change" id="chartChange">--</span>
@@ -577,7 +581,7 @@
       <!-- Bottom: Stats strip -->
       <div class="stat-strip">
         <div class="stat-card">
-          <div class="stat-label">GLOBAL100</div>
+          <div class="stat-label">GLOBAL / NASDAQ100</div>
           <div class="stat-value" id="sGlobal">--</div>
         </div>
         <div class="stat-card">
@@ -620,6 +624,11 @@
           <div class="card-title">GLOBAL ALL</div>
           <div class="index-val" id="mGlobalAll">--</div>
           <div class="tiny" id="mGlobalAllChg" style="margin-top:4px">--</div>
+        </div>
+        <div class="index-card">
+          <div class="card-title">NASDAQ100</div>
+          <div class="index-val" id="mNasdaq100">--</div>
+          <div class="tiny" id="mNasdaq100Chg" style="margin-top:4px">--</div>
         </div>
         <div class="index-card">
           <div class="card-title">Market Breadth</div>
@@ -813,6 +822,7 @@
       /* ── state ── */
       let latestState = null;
       let selectedCompanyId = null;
+      let chartMode = "stock";
       let currentInterval = 5; // sim-minute interval per group (5m/15m/1h/1d)
 
       /* ── tab navigation ── */
@@ -832,7 +842,7 @@
           document.querySelectorAll(".ibtn").forEach((b) => b.classList.remove("active"));
           btn.classList.add("active");
           currentInterval = Number(btn.dataset.interval);
-          if (latestState) drawMainChart(getSelectedStock(latestState));
+          if (latestState) drawMainChart(getSelectedChartAsset(latestState));
         });
       });
 
@@ -1006,6 +1016,36 @@
         return stocks.find((s) => s.companyId === selectedCompanyId) ?? stocks[0] ?? null;
       }
 
+      function getIndexAsChartAsset(state, indexKey, label) {
+        const indexState = state.indexes?.[indexKey];
+        if (!indexState) return null;
+        const candles = (indexState.candles ?? []).map((c) => ({
+          tick: c.tick,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+          volume: c.volume ?? 0
+        }));
+        const dayOpen = Number(candles.at(0)?.open ?? indexState.value ?? 0);
+        const dayHigh = candles.length ? Math.max(...candles.map((c) => c.high)) : Number(indexState.value ?? 0);
+        const dayLow = candles.length ? Math.min(...candles.map((c) => c.low)) : Number(indexState.value ?? 0);
+        return {
+          ticker: label,
+          companyName: `${label} Index`,
+          lastPrice: Number(indexState.value ?? 0),
+          dayOpenPrice: dayOpen,
+          dayHigh,
+          dayLow,
+          candles
+        };
+      }
+
+      function getSelectedChartAsset(state) {
+        if (chartMode === "nasdaq100") return getIndexAsChartAsset(state, "NASDAQ100", "NASDAQ100");
+        return getSelectedStock(state);
+      }
+
       function dayPriceChange(stock) {
         if (!stock) return 0;
         const last = Number(stock.lastPrice ?? stock.candles?.at(-1)?.close ?? 0);
@@ -1020,11 +1060,13 @@
           selectedCompanyId = stocks[0]?.companyId ?? null;
         }
         const sel = getSelectedStock(state);
+        const chartAsset = getSelectedChartAsset(state);
 
         // update stock company select
         const opts = stocks.map((s) => `<option value="${s.companyId}">${s.ticker} – ${s.companyName}</option>`).join("");
         const prevVal = $("chartCompany").value;
         $("chartCompany").innerHTML = opts;
+        $("chartCompany").disabled = chartMode !== "stock";
         if (stocks.some((s) => s.companyId === prevVal)) $("chartCompany").value = prevVal;
         else if (selectedCompanyId) $("chartCompany").value = selectedCompanyId;
 
@@ -1034,19 +1076,26 @@
           if (selectedCompanyId) $("tradeCompany").value = selectedCompanyId;
         }
 
-        if (sel) {
-          const chg = dayPriceChange(sel);
-          $("chartPrice").textContent = `$${n(sel.lastPrice, 4)}`;
+        if (chartAsset) {
+          const chg = dayPriceChange(chartAsset);
+          $("chartPrice").textContent = `$${n(chartAsset.lastPrice, 4)}`;
           $("chartChange").textContent = `${chg >= 0 ? "▲" : "▼"} ${pct(Math.abs(chg))} today`;
           $("chartChange").className = `price-change ${chg >= 0 ? "up" : "down"}`;
-          drawMainChart(sel);
+          drawMainChart(chartAsset);
         }
 
         // stat strip
         const idx = state.indexes?.GLOBAL100;
+        const nasdaq100 = state.indexes?.NASDAQ100;
         const globalAll = state.indexes?.GLOBAL_ALL;
         $("sGlobal").innerHTML = idx
           ? `${n(idx.value)} <span style="font-size:11px;color:${idx.changePct >= 0 ? "var(--up)" : "var(--down)"}">${idx.changePct >= 0 ? "+" : ""}${idx.changePct}%</span>${
+              nasdaq100
+                ? `<div style="font-size:10px;color:${nasdaq100.changePct >= 0 ? "var(--up)" : "var(--down)"}">NDX ${n(nasdaq100.value)} ${
+                    nasdaq100.changePct >= 0 ? "+" : ""
+                  }${nasdaq100.changePct}%</div>`
+                : ""
+            }${
               globalAll
                 ? `<div style="font-size:10px;color:${globalAll.changePct >= 0 ? "var(--up)" : "var(--down)"}">ALL ${n(globalAll.value)} ${
                     globalAll.changePct >= 0 ? "+" : ""
@@ -1099,6 +1148,8 @@
         document.querySelectorAll(".stock-row[data-id]").forEach((row) => {
           row.addEventListener("click", () => {
             selectedCompanyId = row.dataset.id;
+            chartMode = "stock";
+            $("chartMode").value = "stock";
             renderAll(latestState);
           });
         });
@@ -1147,6 +1198,7 @@
         const idx = state.indexes?.GLOBAL100;
         const global50 = state.indexes?.GLOBAL50;
         const globalAll = state.indexes?.GLOBAL_ALL;
+        const nasdaq100 = state.indexes?.NASDAQ100;
 
         $("mGlobal100").textContent = idx ? n(idx.value) : "--";
         $("mGlobal100Chg").innerHTML = idx
@@ -1166,6 +1218,12 @@
               ${globalAll.changePct >= 0 ? "+" : ""}${globalAll.changePct}% today
             </span>`
           : "--";
+        $("mNasdaq100").textContent = nasdaq100 ? n(nasdaq100.value) : "--";
+        $("mNasdaq100Chg").innerHTML = nasdaq100
+          ? `<span style="color:${nasdaq100.changePct >= 0 ? "var(--up)" : "var(--down)"}">
+              ${nasdaq100.changePct >= 0 ? "+" : ""}${nasdaq100.changePct}% today
+            </span>`
+          : "--";
 
         const advancing = stocks.filter((s) => dayPriceChange(s) >= 0).length;
         const declining = stocks.length - advancing;
@@ -1180,8 +1238,9 @@
         $("mHedgeAUM").textContent = `Hedge: ${fmtBig(state.funds?.hedgeAUM ?? 0)} · Retail: ${fmtBig(state.funds?.retailLiquidity ?? 0)}`;
 
         const sent = state.sentiment ?? 0;
-        $("mSentiment").innerHTML = `<span style="color:${col(sent)}">${sent >= 0 ? "Bullish" : "Bearish"}</span>`;
-        $("mConsConf").textContent = `Consumer confidence: ${pct(state.population?.consumerConfidence ?? 0)}`;
+        const regime = String(state.marketRegime ?? "stable").toUpperCase();
+        $("mSentiment").innerHTML = `<span style="color:${col(sent)}">${sent >= 0 ? "Bullish" : "Bearish"} · ${regime}</span>`;
+        $("mConsConf").textContent = `Consumer confidence: ${pct(state.population?.consumerConfidence ?? 0)} · Regime: ${regime}`;
 
         const sorted = (stocks).slice().sort((a, b) => b.marketCap - a.marketCap);
         $("marketsGrid").innerHTML = sorted.map((s) => {
@@ -1483,7 +1542,13 @@
       }
 
       /* ── EVENTS ── */
+      $("chartMode").addEventListener("change", () => {
+        chartMode = $("chartMode").value;
+        if (latestState) renderAll(latestState);
+      });
+
       $("chartCompany").addEventListener("change", () => {
+        if (chartMode !== "stock") return;
         selectedCompanyId = $("chartCompany").value;
         if (latestState) renderAll(latestState);
       });
@@ -1527,7 +1592,7 @@
 
       /* ── resize chart on window resize ── */
       window.addEventListener("resize", () => {
-        if (latestState) drawMainChart(getSelectedStock(latestState));
+        if (latestState) drawMainChart(getSelectedChartAsset(latestState));
       });
     </script>
   </body>

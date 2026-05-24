@@ -29,6 +29,7 @@ This repository now contains an executable V10 foundation for a realistic global
 - AI population model (consumers, investors, CEOs, workers, politicians, influencers)
 - Funds/index layer (institutional/hedge/retail liquidity + valuation-weighted GLOBAL100 and GLOBAL ALL indexes)
   - Added valuation-weighted GLOBAL50 index and per-index constituent weight snapshots
+  - Added valuation-weighted NASDAQ100 index with candle history for dashboard charting
 - Corporate mergers with delisting outcomes and leaderboard progression
 - Persistence + offline progression
   - Checkpoint save/load
@@ -39,6 +40,7 @@ This repository now contains an executable V10 foundation for a realistic global
   - TradingView-style dashboard with larger chart and cleaner market layout
   - Top live news ticker (wars, mergers, sanctions, macro headlines)
   - Side stock list with per-stock mini graph plus stability/pressure stats
+  - Chart mode toggle to view either individual stocks or NASDAQ100 graph
   - Day/night market session cycle where 1 stock day = 5 real minutes
   - Stock trade form supporting both limit and market orders
   - Wallet cash updates immediately after player trades
