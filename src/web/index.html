@@ -294,6 +294,18 @@
       .btn-buy { background: linear-gradient(120deg, #1e6b3c, #39e0a2); border: 0; font-weight: 700; cursor: pointer; }
       .btn-sell { background: linear-gradient(120deg, #7a1c37, #ff7e98); border: 0; font-weight: 700; cursor: pointer; }
       .status-msg { min-height: 16px; margin-top: 6px; font-size: 11px; color: #8dc7ff; }
+      .idea-item {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px;
+        background: #0a1322;
+        margin-bottom: 6px;
+      }
+      .idea-title { font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+      .idea-title.good { color: var(--up); }
+      .idea-title.warn { color: var(--warn); }
+      .idea-title.risk { color: var(--down); }
+      .idea-text { font-size: 11px; color: var(--muted); line-height: 1.35; }
 
       /* ── MARKETS PAGE ── */
       .markets-grid {
@@ -575,6 +587,12 @@
           <div class="card-title">Portfolio</div>
           <div class="tiny" id="portfolioSummary">No positions</div>
           <div id="portfolioList" style="margin-top:8px"></div>
+        </div>
+
+        <div class="card" style="max-height:220px;overflow:auto">
+          <div class="card-title">Market Ideas</div>
+          <div class="tiny" id="ideaSummary">Scanning opportunities…</div>
+          <div id="ideaList" style="margin-top:8px"></div>
         </div>
       </div>
 
@@ -1053,6 +1071,91 @@
         return dayOpen ? (last - dayOpen) / dayOpen : 0;
       }
 
+      function buildMarketIdeas(state) {
+        const stocks = (state.stocks ?? []).slice();
+        if (!stocks.length) return [];
+        const byMove = stocks
+          .map((s) => ({ ...s, move: dayPriceChange(s) }))
+          .sort((a, b) => b.move - a.move);
+        const topGainer = byMove[0];
+        const topLoser = byMove.at(-1);
+        const dipCandidate = byMove.find((s) => s.move <= -0.01 && (s.buyPressure ?? 0.5) > (s.sellPressure ?? 0.5) && (s.stability ?? 0) >= 0.5);
+        const momentumCandidate = byMove.find((s) => s.move >= 0.01 && (s.buyPressure ?? 0.5) >= 0.55);
+        const ideas = [];
+
+        if (momentumCandidate) {
+          ideas.push({
+            tone: "good",
+            title: "Momentum setup",
+            text: `${momentumCandidate.ticker} is up ${pct(Math.abs(momentumCandidate.move))} with strong buy pressure (${n(momentumCandidate.buyPressure ?? 0, 2)}).`
+          });
+        }
+        if (dipCandidate) {
+          ideas.push({
+            tone: "warn",
+            title: "Buy-the-dip watch",
+            text: `${dipCandidate.ticker} is down ${pct(Math.abs(dipCandidate.move))}, but demand is still stronger than selling.`
+          });
+        }
+        if (topGainer && topLoser && topGainer.companyId !== topLoser.companyId) {
+          ideas.push({
+            tone: "warn",
+            title: "Pair trade idea",
+            text: `Relative spread is wide: ${topGainer.ticker} (+${pct(Math.abs(topGainer.move))}) vs ${topLoser.ticker} (-${pct(Math.abs(topLoser.move))}).`
+          });
+        }
+
+        const riskFlags = [];
+        if ((state.macro?.inflation ?? 0) >= 0.08) riskFlags.push(`inflation ${pct(state.macro.inflation)}`);
+        if ((state.geopolitics?.tension ?? 0) >= 0.4) riskFlags.push(`geo tension ${pct(state.geopolitics.tension)}`);
+        if ((state.supplyChains?.pressure ?? 0) >= 0.5) riskFlags.push(`supply pressure ${pct(state.supplyChains.pressure)}`);
+        if (riskFlags.length) {
+          ideas.push({
+            tone: "risk",
+            title: "Risk control",
+            text: `Macro risk elevated (${riskFlags.join(" · ")}). Keep position sizing tighter and avoid over-leverage.`
+          });
+        }
+
+        const holdings = state.player?.holdings ?? {};
+        const exposure = Object.entries(holdings)
+          .map(([companyId, qty]) => {
+            const stock = stocks.find((s) => s.companyId === companyId);
+            if (!stock || !qty) return null;
+            return Math.abs(Number(qty) * Number(stock.lastPrice ?? 0));
+          })
+          .filter(Boolean);
+        const totalExposure = exposure.reduce((sum, v) => sum + v, 0);
+        const largestExposure = exposure.length ? Math.max(...exposure) : 0;
+        if (totalExposure > 0 && largestExposure / totalExposure > 0.35) {
+          ideas.push({
+            tone: "risk",
+            title: "Portfolio concentration",
+            text: `Your largest position is ${n((largestExposure / totalExposure) * 100, 1)}% of exposure. Consider balancing risk across more names.`
+          });
+        }
+
+        return ideas.slice(0, 4);
+      }
+
+      function renderMarketIdeas(state) {
+        const ideas = buildMarketIdeas(state);
+        $("ideaSummary").textContent = ideas.length
+          ? `${ideas.length} live signal${ideas.length > 1 ? "s" : ""} detected`
+          : "No strong setup right now";
+        $("ideaList").innerHTML = ideas.length
+          ? ideas
+              .map(
+                (idea) => `
+            <div class="idea-item">
+              <div class="idea-title ${idea.tone}">${idea.title}</div>
+              <div class="idea-text">${idea.text}</div>
+            </div>`
+              )
+              .join("")
+          : "<div class='tiny'>Keep monitoring flow and wait for clearer momentum or reversal signals.</div>";
+      }
+
       /* ── RENDER TRADING PAGE ── */
       function renderTrading(state) {
         const stocks = state.stocks ?? [];
@@ -1190,6 +1293,8 @@
             </div>
           `).join("")
           : "<div class='tiny'>Trade stock to see your portfolio positions here.</div>";
+
+        renderMarketIdeas(state);
       }
 
       /* ── RENDER MARKETS PAGE ── */
