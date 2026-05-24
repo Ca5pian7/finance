@@ -127,6 +127,10 @@ async function readBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function serveStatic(req, res) {
   const file = req.url === "/" ? "index.html" : req.url.slice(1);
   const target = path.join(publicDir, file);
@@ -198,7 +202,27 @@ const server = http.createServer(async (req, res) => {
         employees: Number(body.employees ?? 500),
         rdBudget: Number(body.rdBudget ?? 0.12)
       });
+      const playerOwned = body.playerOwned === true || body.ownerType === "player";
+      if (playerOwned) {
+        const sharesOutstanding = Math.max(1, Number(company.stock?.sharesOutstanding ?? 100_000_000));
+        const principalStakePct = clamp(Number(body.principalStakePct ?? 67), 10, 95);
+        const principalShares = Math.round((sharesOutstanding * principalStakePct) / 100);
+        const publicFloatShares = Math.max(1, sharesOutstanding - principalShares);
+        company.ownership = {
+          principalHolder: "You",
+          principalStakePct: Number(principalStakePct.toFixed(4)),
+          publicFloatPct: Number((100 - principalStakePct).toFixed(4)),
+          principalShares,
+          publicFloatShares
+        };
+        company.stock.publicFloatShares = publicFloatShares;
+      }
       upsertCompany(state, company);
+      if (playerOwned) {
+        state.player.companyIds = Array.isArray(state.player.companyIds) ? state.player.companyIds : [];
+        if (!state.player.companyIds.includes(company.id)) state.player.companyIds.push(company.id);
+        state.player.activeCompanyId = company.id;
+      }
       return sendJson(res, 201, company);
     }
 

@@ -945,6 +945,65 @@ export function executeStrategicAction(state, payload = {}) {
       pushHeadline(state, `${company.name} is accused of monopolistic market capture`, -0.015);
       return { actionType, companyId: company.id, status: "ok" };
     }
+    case "EXPAND_GLOBAL_OPERATIONS": {
+      const company = requireCompany(state, payload.companyId);
+      const market = payload.country ?? payload.market ?? "international markets";
+      const hires = Math.max(50, Math.round(420 * intensity));
+      company.employees += hires;
+      company.marketDominance = bounded(company.marketDominance + 0.03 * intensity, 0, 1);
+      company.reputation = bounded(company.reputation + 0.015 * intensity, 0, 1);
+      company.kpis.revenue = Number((company.kpis.revenue * (1 + 0.018 * intensity)).toFixed(2));
+      company.kpis.growth = bounded(company.kpis.growth + 0.01 * intensity, -0.4, 1);
+      company.supplyRisk = bounded(company.supplyRisk + 0.01 * intensity, 0, 1);
+      state.sentiment = bounded(state.sentiment + 0.006 * intensity, -1, 1);
+      const stock = state.stocks[company.id];
+      if (stock) {
+        stock.newsMomentum = bounded((stock.newsMomentum ?? 0) + 0.14 * intensity, -1, 1);
+        syncStockDerivedMetrics(stock, company);
+      }
+      pushHeadline(state, `${company.name} expands operations into ${market}`, 0.02);
+      return { actionType, companyId: company.id, hires, market, status: "ok" };
+    }
+    case "COMPETE_PRICE_WAR": {
+      const company = requireCompany(state, payload.companyId);
+      const target = requireCompany(state, payload.targetId);
+      if (target.id === company.id) throw new Error("Cannot target the same company");
+
+      company.marketDominance = bounded(company.marketDominance + 0.08 * intensity, 0, 1);
+      company.kpis.growth = bounded(company.kpis.growth + 0.012 * intensity, -0.4, 1);
+      company.kpis.profitMargin = bounded(company.kpis.profitMargin - 0.015 * intensity, -0.4, 0.8);
+      company.reputation = bounded(company.reputation - 0.01 * intensity, 0, 1);
+
+      target.marketDominance = bounded(target.marketDominance - 0.06 * intensity, 0, 1);
+      target.kpis.growth = bounded(target.kpis.growth - 0.01 * intensity, -0.4, 1);
+      target.kpis.profitMargin = bounded(target.kpis.profitMargin - 0.012 * intensity, -0.4, 0.8);
+      target.reputation = bounded(target.reputation - 0.015 * intensity, 0, 1);
+
+      const companyStock = state.stocks[company.id];
+      if (companyStock) {
+        companyStock.newsMomentum = bounded((companyStock.newsMomentum ?? 0) + 0.18 * intensity, -1, 1);
+        const boosted = Math.max(0.1, companyStock.lastPrice * (1 + 0.006 * intensity));
+        companyStock.lastPrice = Number(applyBarrierClamp(companyStock, boosted, 1).toFixed(4));
+        touchDayRange(companyStock, companyStock.lastPrice);
+        companyStock.shortInterest = bounded(companyStock.shortInterest - 0.01 * intensity, 0, 0.5);
+        syncStockDerivedMetrics(companyStock, company);
+        company.valuation = Number((company.valuation * 0.8 + companyStock.marketCap * 0.2).toFixed(2));
+      }
+
+      const targetStock = state.stocks[target.id];
+      if (targetStock) {
+        targetStock.newsMomentum = bounded((targetStock.newsMomentum ?? 0) - 0.22 * intensity, -1, 1);
+        const weakened = Math.max(0.1, targetStock.lastPrice * (1 - 0.008 * intensity));
+        targetStock.lastPrice = Number(applyBarrierClamp(targetStock, weakened, -1).toFixed(4));
+        touchDayRange(targetStock, targetStock.lastPrice);
+        targetStock.shortInterest = bounded(targetStock.shortInterest + 0.015 * intensity, 0, 0.5);
+        syncStockDerivedMetrics(targetStock, target);
+        target.valuation = Number((target.valuation * 0.8 + targetStock.marketCap * 0.2).toFixed(2));
+      }
+
+      pushHeadline(state, `${company.name} ignites a price war against ${target.name}`, -0.01);
+      return { actionType, companyId: company.id, targetId: target.id, status: "ok" };
+    }
     case "TRIGGER_ECONOMIC_WAR": {
       const region = payload.region ?? "Global Trade Routes";
       const country = payload.country ?? "Major economy";
@@ -986,6 +1045,8 @@ export function runTick(state, { events = [] } = {}) {
       netWorth: 50_000_000_000,
       influence: 0.1,
       rank: 0,
+      companyIds: [],
+      activeCompanyId: null,
       holdings: {},
       positions: {},
       trades: [],
@@ -995,6 +1056,8 @@ export function runTick(state, { events = [] } = {}) {
   ensureAnalyticsState(state);
   if (!Number.isFinite(state.player?.cash)) state.player.cash = 50_000_000_000;
   if (!Number.isFinite(state.player?.netWorth)) state.player.netWorth = state.player.cash;
+  if (!Array.isArray(state.player?.companyIds)) state.player.companyIds = [];
+  if (typeof state.player?.activeCompanyId !== "string" && state.player?.activeCompanyId !== null) state.player.activeCompanyId = null;
   if (!state.player?.holdings) state.player.holdings = {};
   if (!state.player?.positions) state.player.positions = {};
   if (!Array.isArray(state.player?.trades)) state.player.trades = [];

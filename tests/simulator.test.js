@@ -123,6 +123,47 @@ test("strategic action can trigger economic war conditions", () => {
   assert.ok(state.headlines.some((h) => /Economic war escalates|Conflict escalation/i.test(h.headline)));
 });
 
+test("strategic action can run a competitive price war against a target", () => {
+  const state = createInitialState({ seed: 131 });
+  upsertCompany(state, createCompany({ id: "pw-a", name: "Aggro Pricing", country: "USA", sector: "AI", businessModel: "SaaS" }));
+  upsertCompany(state, createCompany({ id: "pw-b", name: "Value Defend", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  const aggressorDominanceBefore = state.companies["pw-a"].marketDominance;
+  const targetDominanceBefore = state.companies["pw-b"].marketDominance;
+
+  const result = executeStrategicAction(state, {
+    actionType: "COMPETE_PRICE_WAR",
+    companyId: "pw-a",
+    targetId: "pw-b",
+    intensity: 1.8
+  });
+
+  assert.equal(result.status, "ok");
+  assert.ok(state.companies["pw-a"].marketDominance > aggressorDominanceBefore);
+  assert.ok(state.companies["pw-b"].marketDominance < targetDominanceBefore);
+  assert.ok(state.headlines.some((h) => /price war/i.test(h.headline)));
+});
+
+test("strategic action can expand global operations and increase company scale", () => {
+  const state = createInitialState({ seed: 132 });
+  upsertCompany(state, createCompany({ id: "xp", name: "Frontier Scale", country: "USA", sector: "Logistics", businessModel: "B2B" }));
+
+  const beforeEmployees = state.companies.xp.employees;
+  const beforeRevenue = state.companies.xp.kpis.revenue;
+
+  const result = executeStrategicAction(state, {
+    actionType: "EXPAND_GLOBAL_OPERATIONS",
+    companyId: "xp",
+    country: "India",
+    intensity: 1.4
+  });
+
+  assert.equal(result.status, "ok");
+  assert.ok(state.companies.xp.employees > beforeEmployees);
+  assert.ok(state.companies.xp.kpis.revenue > beforeRevenue);
+  assert.ok(state.headlines.some((h) => /expands operations/i.test(h.headline)));
+});
+
 test("market session advances with day/night cycle and 10M participant population", () => {
   const state = createInitialState({ seed: 9 });
   upsertCompany(state, createCompany({ id: "m1", name: "Session Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));

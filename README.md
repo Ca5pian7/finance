@@ -7,6 +7,7 @@ This repository now contains an executable V10 foundation for a realistic global
 - Deterministic tick-based simulation loop
 - Company creation system (sector/country/business model + core KPIs)
   - Automatic unique company naming/ticker normalization on listing
+  - Optional player-owned company creation with configurable founder stake
 - Market microstructure
   - Buy/sell order books
   - Founder/public-float ownership split so new listings are tradeable
@@ -31,6 +32,9 @@ This repository now contains an executable V10 foundation for a realistic global
   - Added valuation-weighted GLOBAL50 index and per-index constituent weight snapshots
   - Added valuation-weighted NASDAQ100 index with candle history for dashboard charting
 - Corporate mergers with delisting outcomes and leaderboard progression
+- Competitive strategy layer upgrades
+  - Price-war action against specific competitors
+  - Global operations expansion action for market growth
 - Persistence + offline progression
   - Checkpoint save/load
   - Fast-forward ticks when needed
@@ -117,11 +121,11 @@ npm run simulate
 - `GET /api/rankings/countries` — country leadership table
 - `GET /api/supply-risk` — supply region heat-map and route diagnostics
 - `GET /api/company/intelligence?companyId=<id>` — derived company scorecard and signals
-- `POST /api/company` — create company
+- `POST /api/company` — create company (supports playerOwned/principalStakePct)
 - `POST /api/order` — place order
 - `POST /api/tick` — run one tick with optional events
 - `POST /api/fast-forward` — run multiple ticks quickly
-- `POST /api/action` — execute strategic actions (product launch, market manipulation, acquisitions, VC raise, factories, logistics, policy influence, monopolies, economic war)
+- `POST /api/action` — execute strategic actions (product launch, market manipulation, acquisitions, VC raise, factories, logistics, policy influence, monopolies, price wars, global expansion, economic war)
 
 Example event payload for `/api/tick`:
 
