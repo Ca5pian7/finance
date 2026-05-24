@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { computeCompanyIntel, refreshMarketAnalytics, refreshPlayerAnalytics } from "../src/simulator/analytics.js";
 import { executeMerger, executeStrategicAction, placeOrder, runTick } from "../src/simulator/engine.js";
 import { calculatePeRatio, createCompany, createInitialState, upsertCompany } from "../src/simulator/state.js";
 
@@ -264,6 +265,61 @@ test("new listings expose public float for immediate player trading", () => {
   assert.ok(sellTrades.length >= 1);
   assert.equal(state.player.holdings.flt, 60);
   assert.ok(state.player.cash > afterBuyCash);
+});
+
+test("player analytics track realized and unrealized pnl after fills", () => {
+  const state = createInitialState({ seed: 101 });
+  upsertCompany(state, createCompany({ id: "pa", name: "PnL Atlas", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  placeOrder(state, { companyId: "pa", side: "sell", orderType: "limit", price: 10, quantity: 100, traderId: "maker-sell" });
+  placeOrder(state, { companyId: "pa", side: "buy", orderType: "limit", price: 11, quantity: 100, traderId: "player" });
+
+  state.stocks.pa.lastPrice = 12;
+  refreshPlayerAnalytics(state);
+  assert.ok(state.player.analytics.unrealizedPnl > 0);
+  assert.equal(state.player.analytics.positionsCount, 1);
+
+  placeOrder(state, { companyId: "pa", side: "buy", orderType: "limit", price: 12.4, quantity: 100, traderId: "maker-buy" });
+  placeOrder(state, { companyId: "pa", side: "sell", orderType: "limit", price: 12, quantity: 40, traderId: "player" });
+
+  assert.ok(state.player.analytics.realizedPnl > 0);
+  assert.ok(state.player.trades.length >= 2);
+  assert.equal(state.player.positions.pa.shares, 60);
+});
+
+test("market analytics produce sector, country, supply, and alert summaries", () => {
+  const state = createInitialState({ seed: 102 });
+  upsertCompany(state, createCompany({ id: "us-ai", name: "Vector Cloud", country: "USA", sector: "AI", businessModel: "SaaS" }));
+  upsertCompany(state, createCompany({ id: "jp-chip", name: "Pixel Foundry", country: "Japan", sector: "Semiconductor", businessModel: "Hardware" }));
+
+  state.macro.inflation = 0.082;
+  state.geopolitics.tension = 0.61;
+  state.supplyChains.pressure = 0.67;
+  state.stocks["us-ai"].dayOpenPrice = 10;
+  state.stocks["us-ai"].lastPrice = 10.8;
+  refreshMarketAnalytics(state);
+
+  assert.ok(state.leaderboards.sectors.length >= 2);
+  assert.ok(state.leaderboards.countries.length >= 2);
+  assert.ok(state.analytics.supplyRisk.routes.length >= 1);
+  assert.ok(state.analytics.alerts.some((alert) => alert.category === "macro"));
+  assert.ok(state.analytics.alerts.some((alert) => ["logistics", "volatility"].includes(alert.category)));
+});
+
+test("company intelligence scorecard exposes composite scores and signals", () => {
+  const state = createInitialState({ seed: 103 });
+  upsertCompany(state, createCompany({ id: "ci", name: "Insight Dynamics", country: "USA", sector: "AI", businessModel: "SaaS" }));
+  state.stocks.ci.dayOpenPrice = 10;
+  state.stocks.ci.lastPrice = 10.7;
+  state.stocks.ci.buyPressure = 0.68;
+  state.stocks.ci.sellPressure = 0.31;
+
+  const intel = computeCompanyIntel(state, "ci");
+
+  assert.ok(intel.compositeScore >= 0 && intel.compositeScore <= 100);
+  assert.ok(intel.riskScore >= 0 && intel.riskScore <= 100);
+  assert.ok(Array.isArray(intel.signals));
+  assert.ok(intel.signals.length >= 1);
 });
 
 test("trade size affects execution impact and company valuation", () => {

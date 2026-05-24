@@ -1,6 +1,7 @@
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
+import { computeCompanyIntel, refreshMarketAnalytics, refreshPlayerAnalytics } from "../simulator/analytics.js";
 import { createCompany, createInitialState, createSeedCompanies, upsertCompany } from "../simulator/state.js";
 import { executeMerger, executeStrategicAction, placeOrder, runTick } from "../simulator/engine.js";
 import { fastForward, loadCheckpoint, saveCheckpoint } from "../simulator/persistence.js";
@@ -10,6 +11,8 @@ const publicDir = path.resolve(process.cwd(), "src/web");
 
 const state = loadCheckpoint() ?? createInitialState({ seed: 7 });
 if (!Object.keys(state.companies).length) createSeedCompanies(state, 16);
+refreshPlayerAnalytics(state);
+refreshMarketAnalytics(state);
 
 const streamClients = new Set();
 
@@ -40,6 +43,8 @@ function getSnapshot() {
     indexes: state.indexes,
     leaderboards: state.leaderboards,
     player: state.player,
+    alerts: state.analytics?.alerts ?? [],
+    analytics: state.analytics ?? {},
     stocks: Object.entries(state.stocks).map(([companyId, stock]) => ({
       companyId,
       companyName: state.companies[companyId]?.name ?? companyId,
@@ -84,6 +89,7 @@ function getSnapshot() {
       rdBudget: c.rdBudget,
       carbonEmissions: c.carbonEmissions,
       businessModel: c.businessModel,
+      intelligence: computeCompanyIntel(state, c.id),
       principalHolder: c.ownership?.principalHolder ?? null,
       principalStakePct: c.ownership?.principalStakePct ?? null,
       publicFloatPct: c.ownership?.publicFloatPct ?? null,
@@ -137,9 +143,11 @@ function serveStatic(req, res) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.url === "/api/state" && req.method === "GET") return sendJson(res, 200, getSnapshot());
+    const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
-    if (req.url === "/api/stream" && req.method === "GET") {
+    if (url.pathname === "/api/state" && req.method === "GET") return sendJson(res, 200, getSnapshot());
+
+    if (url.pathname === "/api/stream" && req.method === "GET") {
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -151,7 +159,33 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (req.url === "/api/company" && req.method === "POST") {
+    if (url.pathname === "/api/alerts" && req.method === "GET") {
+      return sendJson(res, 200, state.analytics?.alerts ?? []);
+    }
+
+    if (url.pathname === "/api/player/analytics" && req.method === "GET") {
+      return sendJson(res, 200, { player: state.player, analytics: state.player?.analytics ?? {} });
+    }
+
+    if (url.pathname === "/api/rankings/sectors" && req.method === "GET") {
+      return sendJson(res, 200, state.leaderboards?.sectors ?? []);
+    }
+
+    if (url.pathname === "/api/rankings/countries" && req.method === "GET") {
+      return sendJson(res, 200, state.leaderboards?.countries ?? []);
+    }
+
+    if (url.pathname === "/api/supply-risk" && req.method === "GET") {
+      return sendJson(res, 200, state.analytics?.supplyRisk ?? { routes: [], regions: [], summary: {} });
+    }
+
+    if (url.pathname === "/api/company/intelligence" && req.method === "GET") {
+      const companyId = url.searchParams.get("companyId");
+      if (!companyId || !state.companies[companyId]) return sendJson(res, 404, { error: "Unknown company" });
+      return sendJson(res, 200, computeCompanyIntel(state, companyId));
+    }
+
+    if (url.pathname === "/api/company" && req.method === "POST") {
       const body = await readBody(req);
       const id = `usr-${Date.now()}`;
       const company = createCompany({
@@ -168,42 +202,42 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 201, company);
     }
 
-    if (req.url === "/api/order" && req.method === "POST") {
+    if (url.pathname === "/api/order" && req.method === "POST") {
       const body = await readBody(req);
       const trades = placeOrder(state, body);
-      return sendJson(res, 201, { trades, player: state.player });
+      return sendJson(res, 201, { trades, player: state.player, alerts: state.analytics?.alerts ?? [] });
     }
 
-    if (req.url === "/api/tick" && req.method === "POST") {
+    if (url.pathname === "/api/tick" && req.method === "POST") {
       const body = await readBody(req);
       runTick(state, { events: body.events ?? [] });
       return sendJson(res, 200, getSnapshot());
     }
 
-    if (req.url === "/api/event" && req.method === "POST") {
+    if (url.pathname === "/api/event" && req.method === "POST") {
       const body = await readBody(req);
       const events = Array.isArray(body.events) ? body.events : body.event ? [body.event] : [];
       runTick(state, { events });
       return sendJson(res, 200, getSnapshot());
     }
 
-    if (req.url === "/api/merge" && req.method === "POST") {
+    if (url.pathname === "/api/merge" && req.method === "POST") {
       const body = await readBody(req);
       const outcome = executeMerger(state, { buyerId: body.buyerId, targetId: body.targetId });
       return sendJson(res, 200, outcome);
     }
 
-    if (req.url === "/api/action" && req.method === "POST") {
+    if (url.pathname === "/api/action" && req.method === "POST") {
       const body = await readBody(req);
       const outcome = executeStrategicAction(state, body);
       return sendJson(res, 200, outcome);
     }
 
-    if (req.url === "/api/rankings" && req.method === "GET") {
+    if (url.pathname === "/api/rankings" && req.method === "GET") {
       return sendJson(res, 200, state.leaderboards);
     }
 
-    if (req.url === "/api/fast-forward" && req.method === "POST") {
+    if (url.pathname === "/api/fast-forward" && req.method === "POST") {
       const body = await readBody(req);
       fastForward(state, Number(body.ticks ?? 60));
       return sendJson(res, 200, getSnapshot());

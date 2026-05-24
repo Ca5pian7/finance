@@ -1,4 +1,5 @@
 import { createRng } from "./random.js";
+import { ensureAnalyticsState, recordPlayerTradeSettlement, refreshMarketAnalytics, refreshPlayerAnalytics } from "./analytics.js";
 import { calculatePeRatio } from "./state.js";
 
 const STOCK_DAY_TICKS = 300;
@@ -224,6 +225,10 @@ function settlePlayerTrade(state, companyId, side, quantity, price) {
 
   if (nextShares === 0) delete state.player.holdings[companyId];
   else state.player.holdings[companyId] = nextShares;
+
+  recordPlayerTradeSettlement(state, { companyId, side, quantity, price });
+  refreshPlayerAnalytics(state);
+  refreshMarketAnalytics(state);
 }
 
 export function placeOrder(state, order) {
@@ -921,11 +926,24 @@ function snapshotCandle(state, companyId, open, rng) {
 
 export function runTick(state, { events = [] } = {}) {
   if (!state.player) {
-    state.player = { role: "startup founder", cash: 50_000_000_000, netWorth: 50_000_000_000, influence: 0.1, rank: 0, holdings: {} };
+    state.player = {
+      role: "startup founder",
+      cash: 50_000_000_000,
+      netWorth: 50_000_000_000,
+      influence: 0.1,
+      rank: 0,
+      holdings: {},
+      positions: {},
+      trades: [],
+      analytics: {}
+    };
   }
+  ensureAnalyticsState(state);
   if (!Number.isFinite(state.player?.cash)) state.player.cash = 50_000_000_000;
   if (!Number.isFinite(state.player?.netWorth)) state.player.netWorth = state.player.cash;
   if (!state.player?.holdings) state.player.holdings = {};
+  if (!state.player?.positions) state.player.positions = {};
+  if (!Array.isArray(state.player?.trades)) state.player.trades = [];
   if (!state.indexes?.GLOBAL100) {
     state.indexes = state.indexes ?? {};
     state.indexes.GLOBAL100 = { value: 1000, changePct: 0, members: [] };
@@ -985,6 +1003,8 @@ export function runTick(state, { events = [] } = {}) {
   updatePopulation(state, rng);
   updateFundsAndIndexes(state, rng);
   updateLeaderboards(state);
+  refreshPlayerAnalytics(state);
+  refreshMarketAnalytics(state);
   state.sentiment = bounded(state.sentiment + (rng() - 0.5) * 0.015, -1, 1);
 
   if (state.tick % 60 === 0) {
