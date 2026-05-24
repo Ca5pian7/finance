@@ -80,6 +80,8 @@ export function createInitialState({ seed = 42 } = {}) {
       netWorth: 50_000_000_000,
       influence: 0.1,
       rank: 0,
+      companyIds: [],
+      activeCompanyId: null,
       holdings: {},
       positions: {},
       trades: [],

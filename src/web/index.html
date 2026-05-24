@@ -728,6 +728,13 @@
             <input id="newCompanyModel" type="text" placeholder="Business model" value="SaaS" style="flex:1" />
             <input id="newCompanyEmployees" type="number" min="10" step="10" value="500" style="flex:1" />
           </div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <label class="tiny" style="display:flex;align-items:center;gap:6px;flex:1">
+              <input id="newCompanyPlayerOwned" type="checkbox" checked />
+              Set as my company
+            </label>
+            <input id="newCompanyOwnershipPct" type="number" min="10" max="95" step="1" value="67" style="flex:1" placeholder="Ownership %" />
+          </div>
           <button id="btnCreateCompany" style="width:100%;padding:8px;border:0;background:linear-gradient(120deg,#20558f,#64a9ff);color:white;font-weight:700;cursor:pointer">
             + Create Company
           </button>
@@ -744,6 +751,8 @@
               <option value="BUILD_FACTORY">Build Factory</option>
               <option value="MANAGE_LOGISTICS">Manage Logistics</option>
               <option value="CREATE_MONOPOLY">Compete Aggressively</option>
+              <option value="COMPETE_PRICE_WAR">Start Price War</option>
+              <option value="EXPAND_GLOBAL_OPERATIONS">Expand Globally</option>
               <option value="ACQUIRE_COMPETITOR">Merge / Acquire Competitor</option>
             </select>
           </div>
@@ -1423,13 +1432,22 @@
           $("tradeCompany").innerHTML = opts;
           if (selectedCompanyId) $("tradeCompany").value = selectedCompanyId;
         }
-        const sameActionCompanyOpts = $("actionCompany").innerHTML === opts;
+        const playerCompanyIds = Array.isArray(state.player?.companyIds) ? state.player.companyIds : [];
+        const actionSource = playerCompanyIds.length
+          ? stocks.filter((s) => playerCompanyIds.includes(s.companyId))
+          : stocks;
+        const actionOpts = actionSource.map((s) => `<option value="${s.companyId}">${s.ticker} – ${s.companyName}</option>`).join("");
+        const sameActionCompanyOpts = $("actionCompany").innerHTML === actionOpts;
         if (!sameActionCompanyOpts) {
-          $("actionCompany").innerHTML = opts;
+          $("actionCompany").innerHTML = actionOpts || "<option value=''>No company</option>";
         }
         if (selectedCompanyId) {
           $("tradeCompany").value = selectedCompanyId;
-          $("actionCompany").value = selectedCompanyId;
+          if (!playerCompanyIds.length || playerCompanyIds.includes(selectedCompanyId)) {
+            $("actionCompany").value = selectedCompanyId;
+          } else if (state.player?.activeCompanyId && actionSource.some((s) => s.companyId === state.player.activeCompanyId)) {
+            $("actionCompany").value = state.player.activeCompanyId;
+          }
         }
         const actionCompanyId = $("actionCompany").value || selectedCompanyId;
         const actionTargetOptions = stocks
@@ -2119,7 +2137,9 @@
             country: $("newCompanyCountry").value?.trim() || "USA",
             sector: $("newCompanySector").value?.trim() || "AI",
             businessModel: $("newCompanyModel").value?.trim() || "SaaS",
-            employees: Number($("newCompanyEmployees").value || 500)
+            employees: Number($("newCompanyEmployees").value || 500),
+            playerOwned: $("newCompanyPlayerOwned").checked,
+            principalStakePct: Number($("newCompanyOwnershipPct").value || 67)
           };
           if (!payload.name) throw new Error("Company name is required");
           const res = await fetch("/api/company", {
@@ -2134,6 +2154,7 @@
           $("newCompanyName").value = "";
           selectedCompanyId = data.id;
           $("tradeCompany").value = data.id;
+          $("actionCompany").value = data.id;
         } catch (err) {
           status.style.color = "#ff92aa";
           status.textContent = err.message;
@@ -2147,10 +2168,10 @@
           const companyId = $("actionCompany").value;
           const intensity = Number($("actionIntensity").value || 1);
           const payload = { actionType, companyId, intensity };
-          if (actionType === "ACQUIRE_COMPETITOR") {
-            payload.buyerId = companyId;
+          if (actionType === "ACQUIRE_COMPETITOR" || actionType === "COMPETE_PRICE_WAR") {
+            if (actionType === "ACQUIRE_COMPETITOR") payload.buyerId = companyId;
             payload.targetId = $("actionTarget").value;
-            if (!payload.targetId) throw new Error("Select a competitor to acquire");
+            if (!payload.targetId) throw new Error("Select a target competitor");
           }
           const res = await fetch("/api/action", {
             method: "POST",
