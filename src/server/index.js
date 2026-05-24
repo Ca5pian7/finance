@@ -3,7 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { computeCompanyIntel, refreshMarketAnalytics, refreshPlayerAnalytics } from "../simulator/analytics.js";
 import { createCompany, createInitialState, createSeedCompanies, upsertCompany } from "../simulator/state.js";
-import { executeMerger, executeStrategicAction, placeOrder, runTick } from "../simulator/engine.js";
+import { executeMerger, executeStrategicAction, placeOrder, runTick, squareOffPosition } from "../simulator/engine.js";
 import { fastForward, loadCheckpoint, saveCheckpoint } from "../simulator/persistence.js";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -206,6 +206,12 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const trades = placeOrder(state, body);
       return sendJson(res, 201, { trades, player: state.player, alerts: state.analytics?.alerts ?? [] });
+    }
+
+    if (url.pathname === "/api/order/square-off" && req.method === "POST") {
+      const body = await readBody(req);
+      const trades = squareOffPosition(state, { companyId: body.companyId, traderId: body.traderId ?? "player" });
+      return sendJson(res, 200, { trades, player: state.player, alerts: state.analytics?.alerts ?? [] });
     }
 
     if (url.pathname === "/api/tick" && req.method === "POST") {
