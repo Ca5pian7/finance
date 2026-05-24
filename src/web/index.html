@@ -226,8 +226,12 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 2px;
       }
+      .side-panel::-webkit-scrollbar { width: 5px; }
+      .side-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
       .side-header {
         display: flex;
         justify-content: space-between;
@@ -293,6 +297,7 @@
       input:focus, select:focus { border-color: var(--accent); }
       .btn-buy { background: linear-gradient(120deg, #1e6b3c, #39e0a2); border: 0; font-weight: 700; cursor: pointer; }
       .btn-sell { background: linear-gradient(120deg, #7a1c37, #ff7e98); border: 0; font-weight: 700; cursor: pointer; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
       .status-msg { min-height: 16px; margin-top: 6px; font-size: 11px; color: #8dc7ff; }
       .idea-item {
         border: 1px solid var(--line);
@@ -605,7 +610,7 @@
         }
         .chart-panel { grid-column: 1; grid-row: 1; }
         .stat-strip { grid-column: 1; grid-row: 2; grid-template-columns: repeat(3, 1fr); }
-        .side-panel { grid-column: 1; grid-row: 3; flex-direction: row; flex-wrap: wrap; max-height: none; }
+        .side-panel { grid-column: 1; grid-row: 3; flex-direction: row; flex-wrap: wrap; max-height: none; overflow: visible; }
         .stock-list { max-height: 300px; }
         .company-layout { grid-template-columns: 1fr; }
         .eco-grid { grid-template-columns: repeat(2, 1fr); }
@@ -702,6 +707,12 @@
           <div class="trade-row" style="margin-bottom:8px">
             <input id="tradePrice" type="number" step="0.0001" placeholder="Limit price" style="flex:1" disabled />
           </div>
+          <div class="tiny" id="tradeMechanism" style="margin-bottom:8px;line-height:1.4;color:var(--muted)">
+            Market orders fill immediately near live price. Limit orders wait until matching prices appear.
+          </div>
+          <div id="tradePreview" style="margin-bottom:8px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#0b1526;font-size:11px;color:var(--muted)">
+            Select quantity and order type to view execution preview.
+          </div>
           <div class="trade-row">
             <button class="btn-buy" id="btnBuy" style="flex:1;padding:8px">▲ Buy</button>
             <button class="btn-sell" id="btnSell" style="flex:1;padding:8px">▼ Sell</button>
@@ -710,6 +721,9 @@
             <button id="btnSquareOff" style="width:100%;padding:8px;border:1px solid var(--line);background:#1a2f50;color:var(--text);font-weight:700;cursor:pointer">
               ⟲ Square Off Selected Position
             </button>
+          </div>
+          <div class="tiny" id="squareOffHint" style="margin-top:4px;color:var(--muted)">
+            Square off closes your entire long/short position for the selected stock.
           </div>
           <div class="status-msg" id="tradeStatus"></div>
         </div>
@@ -1410,6 +1424,42 @@
           : "<div class='tiny'>Keep monitoring flow and wait for clearer momentum or reversal signals.</div>";
       }
 
+      function renderTradeAssistant(state) {
+        const stocks = state.stocks ?? [];
+        const holdings = state.player?.holdings ?? {};
+        const companyId = $("tradeCompany").value;
+        const stock = stocks.find((s) => s.companyId === companyId);
+        const qty = Math.max(0, Number($("tradeQty").value || 0));
+        const orderType = $("tradeType").value === "market" ? "market" : "limit";
+        const limitPrice = Number($("tradePrice").value || 0);
+        const refPrice = orderType === "market"
+          ? Number(stock?.lastPrice ?? 0)
+          : Number.isFinite(limitPrice) && limitPrice > 0
+            ? limitPrice
+            : Number(stock?.lastPrice ?? 0);
+        const notional = qty * refPrice;
+        const holding = Number(holdings[companyId] ?? 0);
+        const absHolding = Math.abs(holding);
+        const cash = Number(state.player?.cash ?? 0);
+        const buyResulting = holding + qty;
+        const sellResulting = holding - qty;
+        const buyAction = holding < 0 ? "reduces short exposure first, then builds long exposure" : "adds to long exposure";
+        const sellAction = holding > 0 ? "reduces long exposure first, then can open short exposure" : "adds to short exposure";
+
+        $("tradeMechanism").textContent = `Buy ${buyAction}. Sell ${sellAction}. ${orderType === "market" ? "Market orders execute now using best available liquidity." : "Limit orders execute only when market reaches your limit price."}`;
+        $("tradePreview").textContent = qty > 0
+          ? `Preview: ${qty} shares × $${n(refPrice, 4)} ≈ ${fmtBig(notional)}. If filled, Buy position would become ${n(buyResulting, 0)} shares and Sell position would become ${n(sellResulting, 0)} shares. Wallet: ${fmtBig(cash)}.`
+          : `Set quantity above 0 to preview notional and resulting position impact. Wallet: ${fmtBig(cash)}.`;
+
+        $("btnSquareOff").disabled = !holding;
+        $("btnSquareOff").textContent = holding
+          ? `⟲ Square Off ${n(absHolding, 0)} share${absHolding === 1 ? "" : "s"} (${holding > 0 ? "sell" : "buy"} market)`
+          : "⟲ Square Off Selected Position";
+        $("squareOffHint").textContent = holding
+          ? `Square off will place one market ${holding > 0 ? "sell" : "buy"} for ${n(absHolding, 0)} shares to close this position.`
+          : "No open position on selected stock. Select a stock where you hold long or short shares.";
+      }
+
       /* ── RENDER TRADING PAGE ── */
       function renderTrading(state) {
         const stocks = state.stocks ?? [];
@@ -1581,6 +1631,7 @@
           ? portfolioRows.map((row) => `
             <div class="commodity-row">
               <span>${row.ticker} · ${n(Math.abs(row.qty), 0)} shares ${row.isShort ? "short" : "long"}</span>
+              <button class="portfolio-focus" data-id="${row.companyId}" style="padding:3px 7px;font-size:10px">Focus</button>
               <span style="color:${row.value >= 0 ? "var(--up)" : "var(--down)"}">${fmtBig(row.value)}</span>
             </div>
             <div class="tiny" style="margin:-3px 0 6px 0;color:var(--muted)">
@@ -1588,12 +1639,17 @@
             </div>
           `).join("")
           : "<div class='tiny'>Trade stock to see your portfolio positions here.</div>";
-
-        const selectedHolding = Number(holdings[$("tradeCompany").value] ?? 0);
-        $("btnSquareOff").disabled = !selectedHolding;
-        $("btnSquareOff").textContent = selectedHolding
-          ? `⟲ Square Off ${n(Math.abs(selectedHolding), 0)} share${Math.abs(selectedHolding) === 1 ? "" : "s"}`
-          : "⟲ Square Off Selected Position";
+        document.querySelectorAll(".portfolio-focus[data-id]").forEach((button) => {
+          button.addEventListener("click", () => {
+            selectedCompanyId = button.dataset.id;
+            $("tradeCompany").value = selectedCompanyId;
+            $("chartCompany").value = selectedCompanyId;
+            chartMode = "stock";
+            $("chartMode").value = "stock";
+            renderAll(latestState);
+          });
+        });
+        renderTradeAssistant(state);
 
         renderMarketIdeas(state);
       }
@@ -2081,10 +2137,17 @@
 
       $("tradeType").addEventListener("change", () => {
         $("tradePrice").disabled = $("tradeType").value === "market";
+        if (latestState) renderTradeAssistant(latestState);
       });
       $("tradeCompany").addEventListener("change", () => {
         selectedCompanyId = $("tradeCompany").value;
         if (latestState) renderAll(latestState);
+      });
+      $("tradeQty").addEventListener("input", () => {
+        if (latestState) renderTradeAssistant(latestState);
+      });
+      $("tradePrice").addEventListener("input", () => {
+        if (latestState) renderTradeAssistant(latestState);
       });
 
       async function postOrder(side) {

@@ -47,6 +47,8 @@ This repository now contains an executable V10 foundation for a realistic global
   - Chart mode toggle to view either individual stocks or NASDAQ100 graph
   - Day/night market session cycle where 1 stock day = 5 real minutes
   - Stock trade form supporting both limit and market orders
+  - Trade-assistant panel explaining buy/sell/square-off mechanics with live position-impact previews
+  - Scrollable right-side trading controls so company creation/actions remain reachable on smaller viewports
   - Wallet cash updates immediately after player trades
   - Real-time alert toasts for macro, volatility, and route-risk events
   - Portfolio intelligence card with realized/unrealized P&L, exposure, and win-rate stats
