@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { computeCompanyIntel, refreshMarketAnalytics, refreshPlayerAnalytics } from "../src/simulator/analytics.js";
 import { executeMerger, executeStrategicAction, placeOrder, runTick, squareOffPosition } from "../src/simulator/engine.js";
+import { listScenarioBlueprints, runScenarioPlaybook } from "../src/simulator/scenario-lab.js";
 import { calculatePeRatio, createCompany, createInitialState, upsertCompany } from "../src/simulator/state.js";
 
 test("simulation is deterministic for same seed and event sequence", () => {
@@ -573,4 +574,36 @@ test("nasdaq100 index is available with chart candles", () => {
   assert.ok(Array.isArray(state.indexes.NASDAQ100.candles));
   assert.ok(state.indexes.NASDAQ100.candles.length >= 1);
   assert.ok(Number.isFinite(state.indexes.NASDAQ100.candles.at(-1).close));
+});
+
+test("scenario lab lists available scenario blueprints", () => {
+  const scenarios = listScenarioBlueprints();
+  assert.ok(Array.isArray(scenarios));
+  assert.ok(scenarios.length >= 4);
+  assert.ok(scenarios.some((scenario) => scenario.id === "AI_SUPERCYCLE"));
+  assert.ok(scenarios.every((scenario) => typeof scenario.description === "string" && scenario.description.length > 0));
+});
+
+test("scenario lab can execute a scenario playbook and record history", () => {
+  const state = createInitialState({ seed: 115 });
+  upsertCompany(state, createCompany({ id: "sc-1", name: "Scenario Prime", country: "USA", sector: "AI", businessModel: "SaaS" }));
+  upsertCompany(state, createCompany({ id: "sc-2", name: "Scenario Flux", country: "Japan", sector: "Semiconductor", businessModel: "Hardware" }));
+
+  const startTick = state.tick;
+  const run = runScenarioPlaybook(state, { scenarioId: "SUPPLY_CHAIN_CRUNCH", intensity: 2, ticks: 4 });
+
+  assert.equal(run.scenarioId, "SUPPLY_CHAIN_CRUNCH");
+  assert.equal(run.ticksExecuted, 4);
+  assert.equal(state.tick, startTick + 4);
+  assert.ok((run.eventTypeCounts.SUPPLY_SHOCK ?? 0) >= 1);
+  assert.ok((run.eventTypeCounts.WAR ?? 0) >= 1);
+  assert.ok(Array.isArray(run.steps));
+  assert.equal(run.steps.length, 4);
+  assert.equal(state.scenarioLab.history.length, 1);
+  assert.equal(state.scenarioLab.lastRun?.scenarioId, "SUPPLY_CHAIN_CRUNCH");
+});
+
+test("scenario lab rejects unknown scenario ids", () => {
+  const state = createInitialState({ seed: 116 });
+  assert.throws(() => runScenarioPlaybook(state, { scenarioId: "NOT_REAL" }), /Unknown scenario/);
 });

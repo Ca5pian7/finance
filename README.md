@@ -63,6 +63,10 @@ This repository now contains an executable V10 foundation for a realistic global
   - Sector and country leaderboards with composite leadership scores
   - Supply risk scoring for regions and trade routes
   - Alert engine for macro stress, logistics disruption, news shocks, and high-volatility moves
+- Scenario lab
+  - Built-in scenario presets (AI supercycle, supply chain crunch, policy tightening, peace dividend)
+  - One-call multi-tick scenario execution with run summaries and macro deltas
+  - Scenario run history for replay/debug workflows
 - Automated tests for determinism, matching behavior, bounded indicators, event coupling, and mergers
 
 ## Project Structure
@@ -122,12 +126,14 @@ npm run simulate
 - `GET /api/stream` — realtime event stream (SSE)
 - `GET /api/alerts` — current high-priority alert list
 - `GET /api/player/analytics` — player holdings, trade tape, and portfolio analytics
+- `GET /api/scenarios` — available scenario presets plus recent scenario runs
 - `GET /api/rankings/sectors` — sector leadership table
 - `GET /api/rankings/countries` — country leadership table
 - `GET /api/supply-risk` — supply region heat-map and route diagnostics
 - `GET /api/company/intelligence?companyId=<id>` — derived company scorecard and signals
 - `POST /api/company` — create company (supports playerOwned/principalStakePct)
 - `POST /api/order` — place order
+- `POST /api/scenario/run` — execute a scenario playbook (`scenarioId`, optional `intensity`, optional `ticks`)
 - `POST /api/tick` — run one tick with optional events
 - `POST /api/fast-forward` — run multiple ticks quickly
 - `POST /api/action` — execute strategic actions (product launch, market manipulation, acquisitions, VC raise, factories, logistics, policy influence, monopolies, price wars, global expansion, economic war)
