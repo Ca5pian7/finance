@@ -8,6 +8,7 @@ import { fastForward, loadCheckpoint, saveCheckpoint } from "../simulator/persis
 
 const PORT = Number(process.env.PORT || 3000);
 const publicDir = path.resolve(process.cwd(), "src/web");
+const appRoutes = new Set(["/", "/trading", "/markets", "/company", "/economy", "/portfolio"]);
 
 const state = loadCheckpoint() ?? createInitialState({ seed: 7 });
 if (!Object.keys(state.companies).length) createSeedCompanies(state, 16);
@@ -131,8 +132,8 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function serveStatic(req, res) {
-  const file = req.url === "/" ? "index.html" : req.url.slice(1);
+function serveStatic(req, res, pathname = "/") {
+  const file = appRoutes.has(pathname) ? "index.html" : pathname.slice(1);
   const target = path.join(publicDir, file);
   if (!target.startsWith(publicDir) || !fs.existsSync(target)) {
     res.writeHead(404);
@@ -222,7 +223,26 @@ const server = http.createServer(async (req, res) => {
         state.player.companyIds = Array.isArray(state.player.companyIds) ? state.player.companyIds : [];
         if (!state.player.companyIds.includes(company.id)) state.player.companyIds.push(company.id);
         state.player.activeCompanyId = company.id;
+        state.player.holdings = state.player.holdings ?? {};
+        const founderShares = Number(company.ownership?.principalShares ?? 0);
+        if (founderShares > 0) {
+          state.player.holdings[company.id] = founderShares;
+          state.player.positions = state.player.positions ?? {};
+          state.player.positions[company.id] = {
+            shares: founderShares,
+            avgEntryPrice: Number(company.stock?.lastPrice ?? 0),
+            realizedPnl: Number(state.player.positions[company.id]?.realizedPnl ?? 0),
+            wins: Number(state.player.positions[company.id]?.wins ?? 0),
+            losses: Number(state.player.positions[company.id]?.losses ?? 0),
+            closedTrades: Number(state.player.positions[company.id]?.closedTrades ?? 0),
+            tradedVolume: Number(state.player.positions[company.id]?.tradedVolume ?? 0),
+            totalBoughtNotional: Number(state.player.positions[company.id]?.totalBoughtNotional ?? 0),
+            totalSoldNotional: Number(state.player.positions[company.id]?.totalSoldNotional ?? 0)
+          };
+        }
       }
+      refreshPlayerAnalytics(state);
+      refreshMarketAnalytics(state);
       return sendJson(res, 201, company);
     }
 
@@ -273,7 +293,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, getSnapshot());
     }
 
-    return serveStatic(req, res);
+    return serveStatic(req, res, url.pathname);
   } catch (error) {
     return sendJson(res, 400, { error: error.message });
   }

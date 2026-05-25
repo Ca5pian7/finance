@@ -314,8 +314,9 @@ export function placeOrder(state, order) {
       }
     }
   }
+  const orderId = `${state.tick}-${book[order.side].length + 1}-${order.side}-${Date.now()}`;
   book[order.side].push({
-    id: `${state.tick}-${book[order.side].length + 1}-${order.side}`,
+    id: orderId,
     traderId: order.traderId ?? "system",
     side: order.side,
     price,
@@ -323,7 +324,11 @@ export function placeOrder(state, order) {
     quantity,
     timestamp: Date.now()
   });
-  return matchOrderBook(state, order.companyId);
+  const trades = matchOrderBook(state, order.companyId);
+  if (orderType === "market") {
+    book[order.side] = book[order.side].filter((openOrder) => openOrder.id !== orderId);
+  }
+  return trades;
 }
 
 export function squareOffPosition(state, { companyId, traderId = "player" } = {}) {
@@ -333,13 +338,56 @@ export function squareOffPosition(state, { companyId, traderId = "player" } = {}
   if (!stock) throw new Error("Unknown company");
   const holdingShares = getPlayerHoldingShares(state, companyId);
   if (!holdingShares) throw new Error("No open position to square off");
-  return placeOrder(state, {
-    companyId,
-    side: holdingShares > 0 ? "sell" : "buy",
-    orderType: "market",
-    quantity: Math.abs(holdingShares),
-    traderId
-  });
+  const side = holdingShares > 0 ? "sell" : "buy";
+  const trades = [];
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const currentHolding = getPlayerHoldingShares(state, companyId);
+    if (!currentHolding || (side === "sell" && currentHolding <= 0) || (side === "buy" && currentHolding >= 0)) break;
+    const remaining = Math.abs(currentHolding);
+    seedMarketLiquidity(state, companyId);
+    const before = Math.abs(currentHolding);
+    const fills = placeOrder(state, {
+      companyId,
+      side,
+      orderType: "market",
+      quantity: remaining,
+      traderId
+    });
+    trades.push(...fills);
+    const after = Math.abs(getPlayerHoldingShares(state, companyId));
+    if (after >= before) break;
+  }
+
+  const book = state.orderBooks?.[companyId];
+  if (book) {
+    book.buy = book.buy.filter((openOrder) => openOrder.traderId !== traderId);
+    book.sell = book.sell.filter((openOrder) => openOrder.traderId !== traderId);
+  }
+
+  const remainingHolding = getPlayerHoldingShares(state, companyId);
+  if (remainingHolding) {
+    const stock = state.stocks[companyId];
+    const company = state.companies[companyId];
+    const fallbackPrice = Number(Math.max(0.0001, stock?.lastPrice ?? 0.1).toFixed(4));
+    const forceSide = remainingHolding > 0 ? "sell" : "buy";
+    const quantity = Math.abs(remainingHolding);
+    settlePlayerTrade(state, companyId, forceSide, quantity, fallbackPrice);
+    if (stock) {
+      stock.volume += quantity;
+      touchDayRange(stock, fallbackPrice);
+      syncStockDerivedMetrics(stock, company);
+    }
+    trades.push({
+      companyId,
+      quantity,
+      price: fallbackPrice,
+      buyTraderId: forceSide === "buy" ? traderId : MARKET_MAKER_BUY_ID,
+      sellTraderId: forceSide === "sell" ? traderId : MARKET_MAKER_SELL_ID,
+      forcedSquareOff: true
+    });
+  }
+
+  return trades;
 }
 
 export function matchOrderBook(state, companyId) {

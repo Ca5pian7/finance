@@ -669,6 +669,7 @@
       <div class="tab" data-tab="markets">🏦 Markets</div>
       <div class="tab" data-tab="company">🏢 Company</div>
       <div class="tab" data-tab="economy">🌐 Economy</div>
+      <div class="tab" data-tab="portfolio">💼 Portfolio</div>
     </nav>
 
     <!-- NEWS TICKER -->
@@ -1108,6 +1109,26 @@
       </div>
     </div>
 
+    <!-- ════════ PAGE: PORTFOLIO ════════ -->
+    <div id="page-portfolio" class="page">
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Portfolio Overview</div>
+        <div class="tiny" id="pSummary">No positions</div>
+        <div class="insight-grid" id="pIntel"></div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Positions</div>
+        <div id="pList"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Quick Access</div>
+        <div class="trade-row">
+          <button id="pOpenTrading" style="flex:1">Open Trading Page</button>
+          <button id="pOpenMarkets" style="flex:1">Open Markets Page</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       /* ── utils ── */
       const $ = (id) => document.getElementById(id);
@@ -1187,15 +1208,33 @@
       watchlistIds = loadWatchlist();
 
       /* ── tab navigation ── */
+      function activateTab(tabName, updateHash = true) {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+        const targetTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+        const targetPage = $(`page-${tabName}`);
+        if (!targetTab || !targetPage) return false;
+        targetTab.classList.add("active");
+        targetPage.classList.add("active");
+        if (updateHash && window.location.hash !== `#${tabName}`) window.location.hash = tabName;
+        return true;
+      }
+
+      function tabFromHash() {
+        const hashTab = window.location.hash.replace(/^#/, "").trim().toLowerCase();
+        return ["trading", "markets", "company", "economy", "portfolio"].includes(hashTab) ? hashTab : "trading";
+      }
+
       document.querySelectorAll(".tab").forEach((tab) => {
         tab.addEventListener("click", () => {
-          document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-          document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
-          tab.classList.add("active");
-          $(`page-${tab.dataset.tab}`).classList.add("active");
+          activateTab(tab.dataset.tab);
           if (latestState) renderAll(latestState);
         });
       });
+      window.addEventListener("hashchange", () => {
+        if (activateTab(tabFromHash(), false) && latestState) renderAll(latestState);
+      });
+      activateTab(tabFromHash(), false);
 
       /* ── interval buttons ── */
       document.querySelectorAll(".ibtn").forEach((btn) => {
@@ -1550,6 +1589,88 @@
         $("tradeToolSummary").textContent = `Helpers: max buy ${n(maxBuyQty, 0)} shares @ ~$${n(lastPrice, 4)} · close size ${n(closeQty, 0)} shares · watchlist ${watchlistIds.length} item(s).`;
       }
 
+      function buildPortfolioRows(state, stocks) {
+        const holdings = state.player?.holdings ?? {};
+        return Object.entries(holdings)
+          .map(([companyId, qty]) => {
+            const stock = stocks.find((s) => s.companyId === companyId);
+            if (!stock || qty === 0) return null;
+            const isShort = qty < 0;
+            const stakeBaseShares = Math.max(1, Number(stock.sharesOutstanding ?? 1));
+            const stakePct = Math.max(0, Math.min(100, (Math.abs(qty) / stakeBaseShares) * 100));
+            const floatBaseShares = Math.max(1, Number(stock.publicFloatShares ?? stakeBaseShares));
+            const floatControlPct = Math.max(0, Math.min(100, (Math.abs(qty) / floatBaseShares) * 100));
+            const value = qty * stock.lastPrice;
+            return {
+              companyId,
+              companyName: stock.companyName,
+              ticker: stock.ticker,
+              qty,
+              value,
+              stakePct,
+              floatControlPct,
+              isShort
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+      }
+
+      function renderPortfolioBlocks(state, { summaryId, intelId, listId, buttonClass, buttonLabel }) {
+        const stocks = state.stocks ?? [];
+        const rows = buildPortfolioRows(state, stocks);
+        const totalValue = rows.reduce((sum, row) => sum + row.value, 0);
+        const playerAnalytics = state.player?.analytics ?? {};
+        $(summaryId).textContent = rows.length
+          ? `${rows.length} position(s) · Net ${fmtBig(totalValue)}`
+          : "No positions";
+        $(intelId).innerHTML = [
+          { label: "Realized", value: fmtBig(playerAnalytics.realizedPnl ?? 0), color: tone(playerAnalytics.realizedPnl ?? 0) },
+          { label: "Unrealized", value: fmtBig(playerAnalytics.unrealizedPnl ?? 0), color: tone(playerAnalytics.unrealizedPnl ?? 0) },
+          { label: "Win Rate", value: `${n(playerAnalytics.winRate ?? 0, 1)}%`, color: "var(--accent)" },
+          { label: "Gross Exposure", value: fmtBig(playerAnalytics.grossExposure ?? 0), color: "var(--text)" }
+        ]
+          .map(
+            (item) => `
+            <div class="insight-card">
+              <div class="insight-label">${item.label}</div>
+              <div class="insight-value" style="color:${item.color}">${item.value}</div>
+            </div>`
+          )
+          .join("");
+        $(listId).innerHTML = rows.length
+          ? rows.map((row) => `
+            <div class="commodity-row">
+              <span>${row.ticker} · ${n(Math.abs(row.qty), 0)} shares ${row.isShort ? "short" : "long"}</span>
+              <button class="${buttonClass}" data-id="${row.companyId}" style="padding:3px 7px;font-size:10px">${buttonLabel}</button>
+              <span style="color:${row.value >= 0 ? "var(--up)" : "var(--down)"}">${fmtBig(row.value)}</span>
+            </div>
+            <div class="tiny" style="margin:-3px 0 6px 0;color:var(--muted)">
+              ${row.companyName} · ${row.isShort ? "Borrowed Short Exposure" : "Total Ownership"} ${n(row.stakePct, 4)}% · Float Control ${n(row.floatControlPct, 4)}%
+            </div>
+          `).join("")
+          : "<div class='tiny'>Trade stock to see your portfolio positions here.</div>";
+      }
+
+      function renderPortfolioPage(state) {
+        renderPortfolioBlocks(state, {
+          summaryId: "pSummary",
+          intelId: "pIntel",
+          listId: "pList",
+          buttonClass: "portfolio-trade",
+          buttonLabel: "Trade"
+        });
+        document.querySelectorAll(".portfolio-trade[data-id]").forEach((button) => {
+          button.addEventListener("click", () => {
+            selectedCompanyId = button.dataset.id;
+            $("tradeCompany").value = selectedCompanyId;
+            $("chartCompany").value = selectedCompanyId;
+            activateTab("trading");
+            renderAll(latestState);
+          });
+        });
+      }
+
       function renderWatchlist(state) {
         const stocks = state.stocks ?? [];
         const watchStocks = watchlistIds
@@ -1726,61 +1847,13 @@
           });
         });
 
-        const holdings = state.player?.holdings ?? {};
-        const portfolioRows = Object.entries(holdings)
-          .map(([companyId, qty]) => {
-            const stock = stocks.find((s) => s.companyId === companyId);
-            if (!stock || qty === 0) return null;
-            const isShort = qty < 0;
-            const stakeBaseShares = Math.max(1, Number(stock.sharesOutstanding ?? 1));
-            const stakePct = Math.max(0, Math.min(100, (Math.abs(qty) / stakeBaseShares) * 100));
-            const floatBaseShares = Math.max(1, Number(stock.publicFloatShares ?? stakeBaseShares));
-            const floatControlPct = Math.max(0, Math.min(100, (Math.abs(qty) / floatBaseShares) * 100));
-            const value = qty * stock.lastPrice;
-            return {
-              companyId,
-              companyName: stock.companyName,
-              ticker: stock.ticker,
-              qty,
-              value,
-              stakePct,
-              floatControlPct,
-              isShort
-            };
-          })
-          .filter(Boolean)
-          .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
-        const totalValue = portfolioRows.reduce((sum, row) => sum + row.value, 0);
-        const playerAnalytics = state.player?.analytics ?? {};
-        $("portfolioSummary").textContent = portfolioRows.length
-          ? `${portfolioRows.length} position(s) · Net ${fmtBig(totalValue)}`
-          : "No positions";
-        $("portfolioIntel").innerHTML = [
-          { label: "Realized", value: fmtBig(playerAnalytics.realizedPnl ?? 0), color: tone(playerAnalytics.realizedPnl ?? 0) },
-          { label: "Unrealized", value: fmtBig(playerAnalytics.unrealizedPnl ?? 0), color: tone(playerAnalytics.unrealizedPnl ?? 0) },
-          { label: "Win Rate", value: `${n(playerAnalytics.winRate ?? 0, 1)}%`, color: "var(--accent)" },
-          { label: "Gross Exposure", value: fmtBig(playerAnalytics.grossExposure ?? 0), color: "var(--text)" }
-        ]
-          .map(
-            (item) => `
-            <div class="insight-card">
-              <div class="insight-label">${item.label}</div>
-              <div class="insight-value" style="color:${item.color}">${item.value}</div>
-            </div>`
-          )
-          .join("");
-        $("portfolioList").innerHTML = portfolioRows.length
-          ? portfolioRows.map((row) => `
-            <div class="commodity-row">
-              <span>${row.ticker} · ${n(Math.abs(row.qty), 0)} shares ${row.isShort ? "short" : "long"}</span>
-              <button class="portfolio-focus" data-id="${row.companyId}" style="padding:3px 7px;font-size:10px">Focus</button>
-              <span style="color:${row.value >= 0 ? "var(--up)" : "var(--down)"}">${fmtBig(row.value)}</span>
-            </div>
-            <div class="tiny" style="margin:-3px 0 6px 0;color:var(--muted)">
-              ${row.companyName} · ${row.isShort ? "Borrowed Short Exposure" : "Total Ownership"} ${n(row.stakePct, 4)}% · Float Control ${n(row.floatControlPct, 4)}%
-            </div>
-          `).join("")
-          : "<div class='tiny'>Trade stock to see your portfolio positions here.</div>";
+        renderPortfolioBlocks(state, {
+          summaryId: "portfolioSummary",
+          intelId: "portfolioIntel",
+          listId: "portfolioList",
+          buttonClass: "portfolio-focus",
+          buttonLabel: "Focus"
+        });
         document.querySelectorAll(".portfolio-focus[data-id]").forEach((button) => {
           button.addEventListener("click", () => {
             selectedCompanyId = button.dataset.id;
@@ -1929,10 +2002,7 @@
         document.querySelectorAll(".mkt-card[data-id]").forEach((card) => {
           card.addEventListener("click", () => {
             selectedCompanyId = card.dataset.id;
-            document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-            document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
-            document.querySelector('[data-tab="company"]').classList.add("active");
-            $("page-company").classList.add("active");
+            activateTab("company");
             renderAll(latestState);
           });
         });
@@ -2265,6 +2335,7 @@
         else if (activePage === "markets") renderMarkets(state);
         else if (activePage === "company") renderCompany(state);
         else if (activePage === "economy") renderEconomy(state);
+        else if (activePage === "portfolio") renderPortfolioPage(state);
       }
 
       /* ── EVENTS ── */
@@ -2360,6 +2431,14 @@
           event.preventDefault();
           $("btnQtyMaxBuy").click();
         }
+      });
+      $("pOpenTrading").addEventListener("click", () => {
+        activateTab("trading");
+        if (latestState) renderAll(latestState);
+      });
+      $("pOpenMarkets").addEventListener("click", () => {
+        activateTab("markets");
+        if (latestState) renderAll(latestState);
       });
 
       async function postOrder(side) {

@@ -256,6 +256,29 @@ test("square off closes selected player position", () => {
   const trades = squareOffPosition(state, { companyId: "sq" });
   assert.ok(trades.length >= 1);
   assert.equal(state.player.holdings.sq ?? 0, 0);
+  assert.equal(state.orderBooks.sq.buy.filter((order) => order.traderId === "player").length, 0);
+  assert.equal(state.orderBooks.sq.sell.filter((order) => order.traderId === "player").length, 0);
+});
+
+test("market orders do not rest in the order book when not fully matched", () => {
+  const state = createInitialState({ seed: 97 });
+  upsertCompany(state, createCompany({ id: "mrk", name: "Market Residual", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  placeOrder(state, { companyId: "mrk", side: "sell", orderType: "limit", price: 10, quantity: 10, traderId: "maker-sell" });
+  const trades = placeOrder(state, { companyId: "mrk", side: "buy", orderType: "market", quantity: 100, traderId: "player" });
+  assert.ok(trades.length >= 1);
+  assert.equal(state.orderBooks.mrk.buy.filter((order) => order.traderId === "player").length, 0);
+  assert.equal(state.player.holdings.mrk, 10);
+});
+
+test("square off closes large position even when immediate liquidity is limited", () => {
+  const state = createInitialState({ seed: 98 });
+  upsertCompany(state, createCompany({ id: "sql", name: "Square Liquidity", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  state.player.holdings.sql = 200_000;
+  const trades = squareOffPosition(state, { companyId: "sql" });
+  assert.ok(trades.length >= 1);
+  assert.equal(state.player.holdings.sql ?? 0, 0);
 });
 
 test("run tick repairs missing stock share metadata for legacy checkpoints", () => {
