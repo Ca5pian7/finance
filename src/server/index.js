@@ -42,6 +42,7 @@ function getSnapshot() {
     geopolitics: state.geopolitics,
     supplyChains: state.supplyChains,
     funds: state.funds,
+    financialSystem: state.financialSystem ?? {},
     indexes: state.indexes,
     leaderboards: state.leaderboards,
     player: state.player,
@@ -117,6 +118,17 @@ function getSnapshot() {
       unemploymentStress: state.population.unemploymentStress,
       inequalityIndex: state.population.inequalityIndex,
       topRichest: state.leaderboards.richest.slice(0, 25)
+    },
+    financial: {
+      bankingStress: state.financialSystem?.bankingStress ?? 0,
+      housingIndex: state.financialSystem?.housingIndex ?? 100,
+      sovereignDebtToGdp: state.financialSystem?.sovereignDebtToGdp ?? 0,
+      privateCreditStress: state.financialSystem?.privateCreditStress ?? 0,
+      ventureCapitalDryPowder: state.financialSystem?.ventureCapitalDryPowder ?? 0,
+      ipoPipeline: state.financialSystem?.ipoPipeline ?? [],
+      etfs: state.financialSystem?.etfs ?? [],
+      hedgeFunds: state.financialSystem?.hedgeFunds ?? [],
+      stats: state.financialSystem?.stats ?? {}
     }
   };
 }
@@ -205,6 +217,10 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === "/api/supply-risk" && req.method === "GET") {
       return sendJson(res, 200, state.analytics?.supplyRisk ?? { routes: [], regions: [], summary: {} });
+    }
+
+    if (url.pathname === "/api/financial-system" && req.method === "GET") {
+      return sendJson(res, 200, state.financialSystem ?? {});
     }
 
     if (url.pathname === "/api/company/intelligence" && req.method === "GET") {

@@ -10,6 +10,7 @@ const MARKET_MAKER_BUY_ID = "market-maker-buy";
 const MARKET_MAKER_SELL_ID = "market-maker-sell";
 const STOCK_DAY_INTERVAL_MINUTES = 1440;
 const NASDAQ_SECTORS = new Set(["AI", "Cloud Computing", "Semiconductor", "Robotics", "EV", "Social Media", "Gaming", "Crypto", "Space"]);
+const ETF_TRACKABLE_INDEXES = new Set(["GLOBAL100", "GLOBAL50", "GLOBAL_ALL", "NASDAQ100"]);
 
 function bounded(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -212,6 +213,19 @@ function ensureMovementProfile(stock) {
   }
   stock.movementProfile = { volatility: 1, momentumSensitivity: 1, style: "balanced" };
   return stock.movementProfile;
+}
+
+function ensureFinancialSystemState(state) {
+  state.financialSystem = state.financialSystem ?? {};
+  if (!Number.isFinite(state.financialSystem.bankingStress)) state.financialSystem.bankingStress = 0.22;
+  if (!Number.isFinite(state.financialSystem.housingIndex)) state.financialSystem.housingIndex = 100;
+  if (!Number.isFinite(state.financialSystem.sovereignDebtToGdp)) state.financialSystem.sovereignDebtToGdp = 0.78;
+  if (!Number.isFinite(state.financialSystem.privateCreditStress)) state.financialSystem.privateCreditStress = 0.18;
+  if (!Number.isFinite(state.financialSystem.ventureCapitalDryPowder)) state.financialSystem.ventureCapitalDryPowder = 520_000_000_000;
+  if (!Array.isArray(state.financialSystem.ipoPipeline)) state.financialSystem.ipoPipeline = [];
+  if (!Array.isArray(state.financialSystem.etfs)) state.financialSystem.etfs = [];
+  if (!Array.isArray(state.financialSystem.hedgeFunds)) state.financialSystem.hedgeFunds = [];
+  state.financialSystem.stats = state.financialSystem.stats ?? { etfAssets: 0, ipoCount: 0, largestEtf: null };
 }
 
 function seedMarketLiquidity(state, companyId) {
@@ -824,6 +838,95 @@ function updateFundsAndIndexes(state, rng) {
   state.funds.aiBotAggression = bounded(state.funds.aiBotAggression + (rng() - 0.5) * 0.02 + state.sentiment * 0.01, 0.1, 0.95);
 }
 
+function updateFinancialSystem(state, rng) {
+  ensureFinancialSystemState(state);
+  const fs = state.financialSystem;
+  const macro = state.macro ?? {};
+  const inflation = Number(macro.inflation ?? 0.02);
+  const rate = Number(macro.rate ?? 0.03);
+  const unemployment = Number(macro.unemployment ?? 0.05);
+  const gdpGrowth = Number(macro.gdpGrowth ?? 0.02);
+
+  fs.bankingStress = bounded(
+    fs.bankingStress + inflation * 0.12 + rate * 0.08 + state.geopolitics.tension * 0.06 - gdpGrowth * 0.55 + (rng() - 0.5) * 0.03,
+    0.02,
+    1
+  );
+  fs.privateCreditStress = bounded(
+    fs.privateCreditStress + fs.bankingStress * 0.07 + unemployment * 0.07 - state.sentiment * 0.025 + (rng() - 0.5) * 0.028,
+    0.02,
+    1
+  );
+  fs.sovereignDebtToGdp = bounded(
+    fs.sovereignDebtToGdp + Math.max(0, inflation - 0.02) * 0.25 + Math.max(0, rate - 0.02) * 0.2 - Math.max(0, gdpGrowth) * 0.18 + 0.0004,
+    0.25,
+    1.9
+  );
+  fs.housingIndex = Number(
+    Math.max(45, fs.housingIndex * (1 + gdpGrowth * 0.06 - rate * 0.08 - fs.privateCreditStress * 0.02 + (rng() - 0.5) * 0.01)).toFixed(2)
+  );
+  fs.ventureCapitalDryPowder = Math.max(
+    80_000_000_000,
+    Math.round(fs.ventureCapitalDryPowder * (1 + Math.max(0, state.sentiment) * 0.01 - fs.bankingStress * 0.004 + (rng() - 0.5) * 0.003))
+  );
+
+  if (fs.ipoPipeline.length && (state.tick % 20 === 0 || (state.sentiment > 0.08 && rng() > 0.72))) {
+    const next = fs.ipoPipeline.shift();
+    const company = state.companies?.[next.companyId];
+    const stock = state.stocks?.[next.companyId];
+    if (company && stock) {
+      const raise = Math.max(50_000_000, Number(next.targetRaise ?? company.valuation * 0.06));
+      company.valuation = Number((company.valuation + raise).toFixed(2));
+      company.reputation = bounded(company.reputation + 0.04, 0, 1);
+      company.marketDominance = bounded(company.marketDominance + 0.02, 0, 1);
+      stock.newsMomentum = bounded((stock.newsMomentum ?? 0) + 0.35, -1, 1);
+      stock.listed = true;
+      const floatBoost = Math.max(1, Math.round((stock.sharesOutstanding ?? 100_000_000) * 0.07));
+      stock.publicFloatShares = bounded((stock.publicFloatShares ?? floatBoost) + floatBoost, 1, stock.sharesOutstanding ?? floatBoost);
+      syncStockDerivedMetrics(stock, company);
+      pushHeadline(state, `${company.name} completes IPO and raises ${Math.round(raise / 1_000_000)}M`, 0.03);
+    }
+  }
+
+  const listedStocks = Object.entries(state.stocks ?? {}).filter(([, stock]) => stock?.listed);
+  for (const etf of fs.etfs) {
+    etf.aum = Math.max(
+      100_000_000,
+      Math.round(Number(etf.aum ?? 1_000_000_000) * (1 + state.sentiment * 0.003 - fs.bankingStress * 0.002 + (rng() - 0.5) * 0.006))
+    );
+    etf.flow = Number((state.sentiment * 0.35 - fs.bankingStress * 0.22 + (rng() - 0.5) * 0.3).toFixed(3));
+    const flowImpact = bounded(etf.flow * 0.0028, -0.004, 0.004);
+
+    for (const [companyId, stock] of listedStocks) {
+      const company = state.companies?.[companyId];
+      if (!company) continue;
+      const matchesSector = etf.mode === "sector" && company.sector === etf.benchmark;
+      const matchesCountry = etf.mode === "country" && company.country === etf.benchmark;
+      const matchesGlobal = etf.mode === "index" && ETF_TRACKABLE_INDEXES.has(etf.benchmark);
+      if (!matchesSector && !matchesCountry && !matchesGlobal) continue;
+      stock.newsMomentum = bounded((stock.newsMomentum ?? 0) + flowImpact * 9, -1, 1);
+    }
+  }
+
+  for (const fund of fs.hedgeFunds) {
+    const strategyAlpha =
+      fund.strategy === "quant" ? state.sentiment * 0.006 :
+      fund.strategy === "macro" ? (-inflation + gdpGrowth - fs.bankingStress * 0.35) * 0.012 :
+      (state.marketRegime === "rally" ? 0.0025 : -0.0018);
+    const pnlPct = strategyAlpha + (rng() - 0.5) * 0.01;
+    fund.pnlPct = Number((Number(fund.pnlPct ?? 0) * 0.5 + pnlPct * 50).toFixed(2));
+    fund.aum = Math.max(5_000_000_000, Math.round(Number(fund.aum ?? 50_000_000_000) * (1 + pnlPct)));
+    fund.grossExposure = bounded(Number(fund.grossExposure ?? 1.5) + state.sentiment * 0.01 + (rng() - 0.5) * 0.04, 0.6, 2.8);
+    fund.leverage = bounded(Number(fund.leverage ?? 2) + (rng() - 0.5) * 0.05 - fs.bankingStress * 0.03, 1, 3.8);
+  }
+
+  fs.stats = {
+    etfAssets: fs.etfs.reduce((sum, etf) => sum + Number(etf.aum ?? 0), 0),
+    ipoCount: fs.ipoPipeline.length,
+    largestEtf: fs.etfs.slice().sort((a, b) => Number(b.aum ?? 0) - Number(a.aum ?? 0))[0] ?? null
+  };
+}
+
 function updateLeaderboards(state) {
   state.leaderboards.companies = Object.values(state.companies)
     .map((company) => ({
@@ -1020,6 +1123,62 @@ export function executeStrategicAction(state, payload = {}) {
       pushHeadline(state, `${company.name} expands operations into ${market}`, 0.02);
       return { actionType, companyId: company.id, hires, market, status: "ok" };
     }
+    case "FILE_IPO": {
+      const company = requireCompany(state, payload.companyId);
+      ensureFinancialSystemState(state);
+      const targetRaise = Math.max(50_000_000, Number(payload.targetRaise ?? company.valuation * 0.08));
+      const alreadyFiled = state.financialSystem.ipoPipeline.some((entry) => entry.companyId === company.id);
+      if (!alreadyFiled) {
+        state.financialSystem.ipoPipeline.push({
+          companyId: company.id,
+          targetRaise,
+          filedTick: state.tick,
+          region: company.country
+        });
+      }
+      company.reputation = bounded(company.reputation + 0.01 * intensity, 0, 1);
+      company.politicalInfluence = bounded(company.politicalInfluence + 0.01 * intensity, 0, 1);
+      pushHeadline(state, `${company.name} files for IPO targeting ${Math.round(targetRaise / 1_000_000)}M`, 0.015);
+      return { actionType, companyId: company.id, targetRaise, queued: !alreadyFiled, status: "ok" };
+    }
+    case "LAUNCH_ETF": {
+      const company = requireCompany(state, payload.companyId);
+      ensureFinancialSystemState(state);
+      const mode = payload.mode === "country" ? "country" : payload.mode === "sector" ? "sector" : "index";
+      const benchmark = String(payload.benchmark ?? (mode === "sector" ? company.sector : mode === "country" ? company.country : "GLOBAL100"));
+      const seedAum = Math.max(250_000_000, Number(payload.seedAum ?? 2_000_000_000));
+      const id = `etf-${state.tick}-${Math.round(Math.abs(seedAum) % 10000)}`;
+      const name = String(payload.name ?? `${company.name.split(/\s+/)[0]} ${benchmark} ETF`);
+      state.financialSystem.etfs.push({
+        id,
+        sponsorCompanyId: company.id,
+        name,
+        mode,
+        benchmark,
+        aum: seedAum,
+        flow: 0,
+        createdTick: state.tick
+      });
+      company.marketDominance = bounded(company.marketDominance + 0.015 * intensity, 0, 1);
+      company.reputation = bounded(company.reputation + 0.02 * intensity, 0, 1);
+      pushHeadline(state, `${company.name} launches ${name}`, 0.02);
+      return { actionType, companyId: company.id, etfId: id, benchmark, seedAum, status: "ok" };
+    }
+    case "RUN_BUYBACK": {
+      const company = requireCompany(state, payload.companyId);
+      const stock = state.stocks[company.id];
+      if (!stock) throw new Error("Company stock not found");
+      const buybackPct = bounded(Number(payload.buybackPct ?? (0.5 * intensity)), 0.1, 8);
+      const sharesToRetire = Math.max(1, Math.round((stock.sharesOutstanding * buybackPct) / 100));
+      stock.sharesOutstanding = Math.max(1, stock.sharesOutstanding - sharesToRetire);
+      stock.publicFloatShares = bounded(Math.round(stock.publicFloatShares * (1 - buybackPct / 120)), 1, stock.sharesOutstanding);
+      stock.newsMomentum = bounded((stock.newsMomentum ?? 0) + 0.28 * (buybackPct / 2), -1, 1);
+      company.kpis.profitMargin = bounded(company.kpis.profitMargin + 0.005 * intensity, -0.4, 0.8);
+      syncStockDerivedMetrics(stock, company);
+      company.valuation = Number((company.valuation * 0.78 + stock.marketCap * 0.22).toFixed(2));
+      pushHeadline(state, `${company.name} executes a ${buybackPct.toFixed(2)}% share buyback`, 0.02);
+      return { actionType, companyId: company.id, sharesToRetire, buybackPct: Number(buybackPct.toFixed(2)), status: "ok" };
+    }
     case "PRICE_WAR":
     case "COMPETE_PRICE_WAR": {
       const company = requireCompany(state, payload.companyId);
@@ -1120,6 +1279,7 @@ export function runTick(state, { events = [] } = {}) {
     };
   }
   ensureAnalyticsState(state);
+  ensureFinancialSystemState(state);
   if (!Number.isFinite(state.player?.cash)) state.player.cash = 50_000_000_000;
   if (!Number.isFinite(state.player?.netWorth)) state.player.netWorth = state.player.cash;
   if (!Array.isArray(state.player?.companyIds)) state.player.companyIds = [];
@@ -1186,6 +1346,7 @@ export function runTick(state, { events = [] } = {}) {
 
   updatePopulation(state, rng);
   updateFundsAndIndexes(state, rng);
+  updateFinancialSystem(state, rng);
   updateLeaderboards(state);
   refreshPlayerAnalytics(state);
   refreshMarketAnalytics(state);
