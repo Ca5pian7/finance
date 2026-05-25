@@ -47,6 +47,7 @@ This repository now contains an executable V10 foundation for a realistic global
   - HTTP API
   - SSE stream for live state updates
   - TradingView-style dashboard with larger chart and cleaner market layout
+  - Expanded page layout with dedicated Trade Flow and Stock Control tabs
   - Top live news ticker (wars, mergers, sanctions, macro headlines)
   - Side stock list with per-stock mini graph plus stability/pressure stats
   - Chart mode toggle to view either individual stocks or NASDAQ100 graph
@@ -139,6 +140,7 @@ npm run simulate
 - `GET /api/company/intelligence?companyId=<id>` — derived company scorecard and signals
 - `POST /api/company` — create company (supports playerOwned/principalStakePct)
 - `POST /api/order` — place order
+- `POST /api/stock/control` — tune stock stability/support/resistance (plus strength parameters)
 - `POST /api/scenario/run` — execute a scenario playbook (`scenarioId`, optional `intensity`, optional `ticks`)
 - `POST /api/tick` — run one tick with optional events
 - `POST /api/fast-forward` — run multiple ticks quickly
