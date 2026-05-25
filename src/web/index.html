@@ -1854,14 +1854,18 @@
         selectedCompanyId = stock.companyId;
         $("ctrlCompanyInfo").textContent = `${stock.companyName} · Last $${n(stock.lastPrice, 4)} · Support $${n(stock.support ?? 0, 4)} · Resistance $${n(stock.resistance ?? 0, 4)}`;
         const stabilityPct = Math.round(Number(stock.stability ?? 0.7) * 100);
-        $("ctrlStability").value = String(stabilityPct);
-        $("ctrlStabilityValue").value = String(stabilityPct);
-        $("ctrlSupport").value = Number(stock.support ?? 0).toFixed(4);
-        $("ctrlResistance").value = Number(stock.resistance ?? 0).toFixed(4);
-        $("ctrlSupportStrength").value = String(Math.round(Number(stock.supportStrength ?? 0.72) * 100));
-        $("ctrlResistanceStrength").value = String(Math.round(Number(stock.resistanceStrength ?? 0.72) * 100));
-        $("ctrlStabilityMeter").style.width = `${stabilityPct}%`;
-        $("ctrlStabilityMeter").style.background = stabColor(Number(stock.stability ?? 0.7));
+        const controlInputIds = ["ctrlStability", "ctrlStabilityValue", "ctrlSupport", "ctrlResistance", "ctrlSupportStrength", "ctrlResistanceStrength"];
+        const userIsEditing = controlInputIds.some((id) => document.activeElement === $(id));
+        if (!userIsEditing) {
+          $("ctrlStability").value = String(stabilityPct);
+          $("ctrlStabilityValue").value = String(stabilityPct);
+          $("ctrlSupport").value = Number(stock.support ?? 0).toFixed(4);
+          $("ctrlResistance").value = Number(stock.resistance ?? 0).toFixed(4);
+          $("ctrlSupportStrength").value = String(Math.round(Number(stock.supportStrength ?? 0.72) * 100));
+          $("ctrlResistanceStrength").value = String(Math.round(Number(stock.resistanceStrength ?? 0.72) * 100));
+          $("ctrlStabilityMeter").style.width = `${stabilityPct}%`;
+          $("ctrlStabilityMeter").style.background = stabColor(Number(stock.stability ?? 0.7));
+        }
       }
 
       function buildPortfolioRows(state, stocks) {
