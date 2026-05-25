@@ -6,10 +6,22 @@ import { createCompany, createInitialState, createSeedCompanies, upsertCompany }
 import { executeMerger, executeStrategicAction, placeOrder, runTick, squareOffPosition } from "../simulator/engine.js";
 import { fastForward, loadCheckpoint, saveCheckpoint } from "../simulator/persistence.js";
 import { listScenarioBlueprints, runScenarioPlaybook } from "../simulator/scenario-lab.js";
+import { buildMissionBoard, getAcademySnapshot, getInsightsBundle, listStrategyPlaybooks, runStrategyBacktest } from "../simulator/insights.js";
 
 const PORT = Number(process.env.PORT || 3000);
 const publicDir = path.resolve(process.cwd(), "src/web");
-const appRoutes = new Set(["/", "/trading", "/trade-flow", "/markets", "/company", "/control", "/economy", "/portfolio"]);
+const appRoutes = new Set([
+  "/",
+  "/trading",
+  "/trade-flow",
+  "/markets",
+  "/company",
+  "/control",
+  "/economy",
+  "/portfolio",
+  "/strategy-lab",
+  "/academy"
+]);
 
 const state = loadCheckpoint() ?? createInitialState({ seed: 7 });
 if (!Object.keys(state.companies).length) createSeedCompanies(state, 16);
@@ -225,6 +237,29 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === "/api/financial-system" && req.method === "GET") {
       return sendJson(res, 200, state.financialSystem ?? {});
+    }
+
+    if (url.pathname === "/api/insights" && req.method === "GET") {
+      return sendJson(res, 200, getInsightsBundle(getSnapshot()));
+    }
+
+    if (url.pathname === "/api/insights/mission-board" && req.method === "GET") {
+      const limit = Number(url.searchParams.get("limit") ?? 12);
+      return sendJson(res, 200, buildMissionBoard(getSnapshot(), { limit }));
+    }
+
+    if (url.pathname === "/api/insights/strategy-playbooks" && req.method === "GET") {
+      return sendJson(res, 200, { playbooks: listStrategyPlaybooks() });
+    }
+
+    if (url.pathname === "/api/insights/backtest" && req.method === "POST") {
+      const body = await readBody(req);
+      const result = runStrategyBacktest(getSnapshot(), body);
+      return sendJson(res, 200, result);
+    }
+
+    if (url.pathname === "/api/insights/academy" && req.method === "GET") {
+      return sendJson(res, 200, getAcademySnapshot(getSnapshot()));
     }
 
     if (url.pathname === "/api/company/intelligence" && req.method === "GET") {

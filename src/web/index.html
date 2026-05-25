@@ -712,6 +712,8 @@
       <div class="tab" data-tab="control">🎛️ Stock Control</div>
       <div class="tab" data-tab="economy">🌐 Economy</div>
       <div class="tab" data-tab="portfolio">💼 Portfolio</div>
+      <div class="tab" data-tab="strategy-lab">🧪 Strategy Lab</div>
+      <div class="tab" data-tab="academy">🎓 Academy</div>
     </nav>
 
     <!-- NEWS TICKER -->
@@ -1291,6 +1293,58 @@
       </div>
     </div>
 
+
+
+    <!-- ════════ PAGE: STRATEGY LAB ════════ -->
+    <div id="page-strategy-lab" class="page">
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Strategy Backtest Lab</div>
+        <div class="trade-row" style="margin-bottom:8px">
+          <select id="slPlaybook" style="flex:2"></select>
+          <input id="slHorizon" type="number" min="5" max="720" step="5" value="60" style="flex:1" />
+          <input id="slCapital" type="number" min="10000" step="10000" value="10000000" style="flex:1" />
+        </div>
+        <div class="trade-row" style="margin-bottom:8px">
+          <button id="slRunBacktest" style="flex:1">Run Backtest</button>
+          <button id="slRefreshBoard" style="flex:1">Refresh Mission Board</button>
+        </div>
+        <div class="tiny" id="slSummary">Loading strategy lab…</div>
+        <div class="status-msg" id="slStatus"></div>
+      </div>
+      <div class="eco-row" style="margin-bottom:12px">
+        <div class="card">
+          <div class="card-title">Top Candidates</div>
+          <div id="slCandidates"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Capital Curve</div>
+          <div id="slCapitalCurve"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Mission Board</div>
+        <div id="slMissions"></div>
+      </div>
+    </div>
+
+    <!-- ════════ PAGE: ACADEMY ════════ -->
+    <div id="page-academy" class="page">
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Trading Academy</div>
+        <div class="tiny" id="acSummary">Loading academy…</div>
+      </div>
+      <div class="eco-row" style="margin-bottom:12px">
+        <div class="card">
+          <div class="card-title">Tracks</div>
+          <div id="acTracks"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Featured Lessons</div>
+          <div id="acLessons"></div>
+        </div>
+      </div>
+    </div>
+
     <script>
       /* ── utils ── */
       const $ = (id) => document.getElementById(id);
@@ -1348,6 +1402,9 @@
       let currentInterval = 5; // sim-minute interval per group (5m/15m/1h/1d)
       const WATCHLIST_STORAGE_KEY = "wfs-watchlist-v2";
       let watchlistIds = [];
+      let strategyLabCache = null;
+      let missionBoardCache = null;
+      let academyCache = null;
 
       function loadWatchlist() {
         try {
@@ -1384,7 +1441,9 @@
 
       function tabFromHash() {
         const hashTab = window.location.hash.replace(/^#/, "").trim().toLowerCase();
-        return ["trading", "trade-flow", "markets", "company", "control", "economy", "portfolio"].includes(hashTab) ? hashTab : "trading";
+        return ["trading", "trade-flow", "markets", "company", "control", "economy", "portfolio", "strategy-lab", "academy"].includes(hashTab)
+          ? hashTab
+          : "trading";
       }
 
       document.querySelectorAll(".tab").forEach((tab) => {
@@ -2548,6 +2607,153 @@
           </div>`).join("") || "<div class='tiny'>No ranking data</div>";
       }
 
+
+
+      async function loadStrategyPlaybooks() {
+        const select = $("slPlaybook");
+        if (!select) return;
+        if (select.options.length > 0) return;
+        const res = await fetch("/api/insights/strategy-playbooks");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load playbooks");
+        select.innerHTML = (data.playbooks ?? [])
+          .map((p) => `<option value="${p.id}">${p.name} · ${String(p.riskLevel ?? "medium").toUpperCase()}</option>`)
+          .join("");
+      }
+
+      async function refreshMissionBoard(force = false) {
+        if (missionBoardCache && !force) return missionBoardCache;
+        const res = await fetch("/api/insights/mission-board?limit=12");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load mission board");
+        missionBoardCache = data;
+        return missionBoardCache;
+      }
+
+      async function runStrategyLabBacktest() {
+        const status = $("slStatus");
+        try {
+          await loadStrategyPlaybooks();
+          const payload = {
+            playbookId: $("slPlaybook").value,
+            horizonTicks: Number($("slHorizon").value || 60),
+            capital: Number($("slCapital").value || 10000000)
+          };
+          const res = await fetch("/api/insights/backtest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Backtest failed");
+          strategyLabCache = data;
+          status.style.color = "#8dc7ff";
+          status.textContent = `Backtest complete · ${data.evaluatedCount ?? 0} symbols evaluated`;
+          if (latestState) renderStrategyLab(latestState);
+        } catch (error) {
+          status.style.color = "#ff92aa";
+          status.textContent = error.message;
+        }
+      }
+
+      async function refreshAcademy(force = false) {
+        if (academyCache && !force) return academyCache;
+        const res = await fetch("/api/insights/academy");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load academy");
+        academyCache = data;
+        return academyCache;
+      }
+
+      function renderStrategyLab(state) {
+        const summary = strategyLabCache;
+        const board = missionBoardCache;
+
+        $("slSummary").textContent = summary
+          ? `${summary.playbook?.name ?? "Strategy"} · Regime ${String(summary.regime ?? "balanced").toUpperCase()} · Win probability ${n(summary.stats?.winProbabilityPct ?? 0, 2)}%`
+          : "Run a backtest to generate ranked candidates and capital curve diagnostics.";
+
+        $("slCandidates").innerHTML = summary?.topCandidates?.length
+          ? summary.topCandidates.slice(0, 12).map((row, idx) => `
+              <div class="commodity-row">
+                <span>#${idx + 1} ${row.ticker} · ${row.companyName}</span>
+                <span style="color:${row.expectedReturnPct >= 0 ? "var(--up)" : "var(--down)"}">${row.expectedReturnPct >= 0 ? "+" : ""}${n(row.expectedReturnPct, 2)}%</span>
+              </div>
+              <div class="tiny" style="margin:-4px 0 8px 0;color:var(--muted)">
+                Confidence ${n(row.confidencePct, 1)}% · Drawdown ${n(row.expectedDrawdownPct, 2)}% · Score ${n(row.score ?? 0, 2)}
+              </div>
+            `).join("")
+          : "<div class='tiny'>No backtest results yet.</div>";
+
+        $("slCapitalCurve").innerHTML = summary?.capitalCurve?.curve?.length
+          ? summary.capitalCurve.curve.map((step) => `
+              <div class="commodity-row">
+                <span>Step ${step.step} · ${step.ticker}</span>
+                <span style="color:${step.pnl >= 0 ? "var(--up)" : "var(--down)"}">${fmtBig(step.pnl)}</span>
+              </div>
+              <div class="tiny" style="margin:-4px 0 8px 0;color:var(--muted)">
+                Allocation ${fmtBig(step.allocation)} · Equity ${fmtBig(step.equity)}
+              </div>
+            `).join("")
+          : "<div class='tiny'>Capital path will appear after running a backtest.</div>";
+
+        $("slMissions").innerHTML = board?.missions?.length
+          ? board.missions.slice(0, 12).map((mission) => `
+              <div class="route-card" style="margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;gap:8px">
+                  <div>
+                    <div style="font-weight:700">${mission.ticker} · ${mission.type.toUpperCase()}</div>
+                    <div class="tiny">Priority ${mission.priority} · Risk budget ${n(mission.constraints?.riskBudgetPct ?? 0, 2)}%</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-weight:700;color:var(--accent)">${n(mission.diagnostics?.opportunityScore ?? 0, 1)}</div>
+                    <div class="tiny">risk ${n(mission.diagnostics?.riskScore ?? 0, 1)}</div>
+                  </div>
+                </div>
+                <div class="tiny" style="margin-top:6px;line-height:1.45">${mission.thesis}</div>
+                <div class="tiny" style="margin-top:6px;color:var(--muted)">Entry: ${mission.setup?.entry} · Stop: ${mission.setup?.stop} · Target: ${mission.setup?.target}</div>
+              </div>
+            `).join("")
+          : "<div class='tiny'>Mission board is loading…</div>";
+      }
+
+      function renderAcademy(state) {
+        const academy = academyCache;
+        $("acSummary").textContent = academy
+          ? `${academy.totalLessons ?? 0} lessons · Mastery ${n(academy.summary?.estimatedMasteryPct ?? 0, 2)}% · Suggested tracks: ${(academy.summary?.suggestedTrackIds ?? []).join(", ")}`
+          : "Academy content is loading…";
+
+        $("acTracks").innerHTML = academy?.tracks?.length
+          ? academy.tracks.map((track) => `
+              <div class="route-card" style="margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;gap:8px">
+                  <div>
+                    <div style="font-weight:700">${track.name}</div>
+                    <div class="tiny">${track.lessonCount} lessons · ${n(track.estimatedHours, 1)}h estimated</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-weight:700;color:var(--accent)">${n(track.averageScoreWeight, 1)}</div>
+                    <div class="tiny">weight</div>
+                  </div>
+                </div>
+                <div class="tiny" style="margin-top:6px;color:var(--muted)">${(track.tags ?? []).join(" · ")}</div>
+              </div>
+            `).join("")
+          : "<div class='tiny'>No tracks yet.</div>";
+
+        $("acLessons").innerHTML = academy?.featuredLessons?.length
+          ? academy.featuredLessons.map((lesson) => `
+              <div class="commodity-row">
+                <span>${lesson.title}</span>
+                <span style="color:var(--up)">${lesson.estimatedMinutes}m</span>
+              </div>
+              <div class="tiny" style="margin:-3px 0 8px 0;color:var(--muted)">
+                ${lesson.objective} · ${lesson.difficulty.toUpperCase()} · Score ${lesson.scoreWeight}
+              </div>
+            `).join("")
+          : "<div class='tiny'>No featured lessons yet.</div>";
+      }
+
       /* ── MASTER RENDER ── */
       function renderAll(state) {
         latestState = state;
@@ -2593,6 +2799,8 @@
         else if (activePage === "control") renderStockControlPage(state);
         else if (activePage === "economy") renderEconomy(state);
         else if (activePage === "portfolio") renderPortfolioPage(state);
+        else if (activePage === "strategy-lab") renderStrategyLab(state);
+        else if (activePage === "academy") renderAcademy(state);
       }
 
       /* ── EVENTS ── */
@@ -2696,6 +2904,19 @@
       $("pOpenMarkets").addEventListener("click", () => {
         activateTab("markets");
         if (latestState) renderAll(latestState);
+      });
+      $("slRunBacktest").addEventListener("click", runStrategyLabBacktest);
+      $("slRefreshBoard").addEventListener("click", async () => {
+        const status = $("slStatus");
+        try {
+          await refreshMissionBoard(true);
+          status.style.color = "#8dc7ff";
+          status.textContent = "Mission board refreshed.";
+          if (latestState) renderStrategyLab(latestState);
+        } catch (error) {
+          status.style.color = "#ff92aa";
+          status.textContent = error.message;
+        }
       });
       $("openTradeFlowFromTrading").addEventListener("click", () => {
         activateTab("trade-flow");
@@ -2926,9 +3147,26 @@
         renderTrading(latestState);
       });
 
+
+      loadStrategyPlaybooks()
+        .then(() => runStrategyLabBacktest())
+        .catch((error) => {
+          const status = $("slStatus");
+          if (status) {
+            status.style.color = "#ff92aa";
+            status.textContent = error.message;
+          }
+        });
+      refreshMissionBoard().catch(() => {});
+      refreshAcademy().catch(() => {});
+
       /* ── SSE ── */
       const stream = new EventSource("/api/stream");
-      stream.onmessage = (e) => renderAll(JSON.parse(e.data));
+      stream.onmessage = (e) => {
+        renderAll(JSON.parse(e.data));
+        refreshMissionBoard().catch(() => {});
+        refreshAcademy().catch(() => {});
+      };
       stream.onerror = () => {
         $("tradeStatus").textContent = "Stream disconnected. Reconnecting...";
         $("tradeStatus").style.color = "#ff92aa";

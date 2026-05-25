@@ -48,6 +48,8 @@ This repository now contains an executable V10 foundation for a realistic global
   - SSE stream for live state updates
   - TradingView-style dashboard with larger chart and cleaner market layout
   - Expanded page layout with dedicated Trade Flow and Stock Control tabs
+  - Added dedicated Strategy Lab page for mission board + backtest diagnostics
+  - Added dedicated Academy page with large structured lesson catalog and featured learning paths
   - Top live news ticker (wars, mergers, sanctions, macro headlines)
   - Side stock list with per-stock mini graph plus stability/pressure stats
   - Chart mode toggle to view either individual stocks or NASDAQ100 graph
@@ -138,6 +140,11 @@ npm run simulate
 - `GET /api/supply-risk` — supply region heat-map and route diagnostics
 - `GET /api/financial-system` — banking/credit/housing/ETF/IPO/hedge-fund system snapshot
 - `GET /api/company/intelligence?companyId=<id>` — derived company scorecard and signals
+- `GET /api/insights` — combined insights payload (mission board, strategy playbooks, academy snapshot)
+- `GET /api/insights/mission-board?limit=<n>` — prioritized mission board with executable setup diagnostics
+- `GET /api/insights/strategy-playbooks` — available strategy playbooks for lab backtests
+- `POST /api/insights/backtest` — run deterministic strategy backtest (`playbookId`, `horizonTicks`, `capital`, optional `companyIds`)
+- `GET /api/insights/academy` — academy tracks, featured lessons, and mastery snapshot
 - `POST /api/company` — create company (supports playerOwned/principalStakePct)
 - `POST /api/order` — place order
 - `POST /api/stock/control` — tune stock stability/support/resistance (plus strength parameters)
