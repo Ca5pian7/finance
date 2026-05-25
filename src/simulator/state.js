@@ -57,10 +57,10 @@ export function createInitialState({ seed = 42 } = {}) {
     },
     population: createPopulation(seed),
     funds: {
-      institutionalAUM: 2_400_000_000_000,
-      hedgeAUM: 850_000_000_000,
-      retailLiquidity: 450_000_000_000,
-      aiBotAggression: 0.35
+      institutionalAUM: 3_200_000_000_000,
+      hedgeAUM: 1_200_000_000_000,
+      retailLiquidity: 900_000_000_000,
+      aiBotAggression: 0.42
     },
     indexes: {
       GLOBAL100: { value: 1000, changePct: 0, members: [] },
@@ -354,7 +354,7 @@ function createPopulation(seed) {
   }
 
   return {
-    participantCount: 10_000_000,
+    participantCount: 25_000_000,
     agents,
     unemploymentStress: 0.05,
     consumerConfidence: 0.62,

@@ -15,7 +15,7 @@ This repository now contains an executable V10 foundation for a realistic global
   - Matching engine
   - Price updates, market cap, volume, PE ratio, short interest, dividend yield
   - Day-based price effect display with 5M/15M/1H/1D chart intervals
-  - Crowd-pressure/stability dynamics with 10,000,000 simulated participants
+  - Crowd-pressure/stability dynamics with 25,000,000 simulated participants
   - Stronger support/resistance with gradual break pressure (time-to-break behavior)
   - Stabilized daily move profile (typical ~7–10% range, with larger news-driven one-day spikes possible)
   - Continuous listing model (no delisting/halt shutdown state)

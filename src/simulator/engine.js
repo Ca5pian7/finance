@@ -678,16 +678,24 @@ function simulateCrowdFlow(state, company, stock, rng) {
     0.2,
     0.8
   );
-  const buyPressure = bounded(sentimentBias + (rng() - 0.5) * 0.1, 0.05, 0.95);
-  const sellPressure = bounded(1 - buyPressure + (rng() - 0.5) * 0.08, 0.05, 0.95);
+  const rawBuyPressure = bounded(sentimentBias + (rng() - 0.5) * 0.1, 0.05, 0.95);
+  const rawSellPressure = bounded(1 - sentimentBias + (rng() - 0.5) * 0.08, 0.05, 0.95);
+  const pressureTotal = Math.max(0.1, rawBuyPressure + rawSellPressure);
+  const buyPressure = bounded(rawBuyPressure / pressureTotal, 0.05, 0.95);
+  const sellPressure = bounded(rawSellPressure / pressureTotal, 0.05, 0.95);
   const pressureGap = buyPressure - sellPressure;
+  const liquidityScale = bounded(
+    ((state.funds?.institutionalAUM ?? 0) + (state.funds?.hedgeAUM ?? 0) + (state.funds?.retailLiquidity ?? 0)) / 3_700_000_000_000,
+    0.8,
+    2.2
+  );
   const activeRatio = bounded(
-    0.006 + state.funds.aiBotAggression * 0.002 + Math.abs(state.sentiment) * 0.002 + rng() * 0.0015,
-    0.001,
-    0.02
+    (0.0075 + state.funds.aiBotAggression * 0.003 + Math.abs(state.sentiment) * 0.0025 + rng() * 0.002) * (0.85 + liquidityScale * 0.45),
+    0.0015,
+    0.03
   );
   const activeParticipants = Math.round(participants * activeRatio);
-  const flowVolume = Math.max(100, Math.round((activeParticipants / companyCount) * (0.6 + rng() * 0.8)));
+  const flowVolume = Math.max(120, Math.round((activeParticipants / companyCount) * (0.75 + rng() * 0.95) * liquidityScale));
 
   stock.volume = Math.max(0, Math.round(stock.volume * 0.92 + flowVolume));
   stock.buyPressure = Number(buyPressure.toFixed(3));
@@ -1012,6 +1020,7 @@ export function executeStrategicAction(state, payload = {}) {
       pushHeadline(state, `${company.name} expands operations into ${market}`, 0.02);
       return { actionType, companyId: company.id, hires, market, status: "ok" };
     }
+    case "PRICE_WAR":
     case "COMPETE_PRICE_WAR": {
       const company = requireCompany(state, payload.companyId);
       const target = requireCompany(state, payload.targetId);
@@ -1052,6 +1061,9 @@ export function executeStrategicAction(state, payload = {}) {
       pushHeadline(state, `${company.name} ignites a price war against ${target.name}`, -0.01);
       return { actionType, companyId: company.id, targetId: target.id, status: "ok" };
     }
+    case "TRIGGER_WAR":
+    case "ECONOMIC_WAR":
+    case "WAR":
     case "TRIGGER_ECONOMIC_WAR": {
       const region = payload.region ?? "Global Trade Routes";
       const country = payload.country ?? "Major economy";
@@ -1060,8 +1072,14 @@ export function executeStrategicAction(state, payload = {}) {
       pushHeadline(state, "Economic war escalates with retaliatory sanctions and supply blockades", -0.06);
       return { actionType, region, country, status: "ok" };
     }
-    case "ACQUIRE_COMPETITOR":
-      return executeMerger(state, { buyerId: payload.buyerId, targetId: payload.targetId });
+    case "MERGER":
+    case "MERGE":
+    case "ACQUIRE_COMPETITOR": {
+      const buyerId = payload.buyerId ?? payload.companyId;
+      const targetId = payload.targetId;
+      if (!buyerId || !targetId) throw new Error("buyerId and targetId are required");
+      return executeMerger(state, { buyerId, targetId });
+    }
     default:
       throw new Error("Unknown strategic action");
   }
