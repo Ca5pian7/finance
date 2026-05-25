@@ -108,6 +108,10 @@ export function createInitialState({ seed = 42 } = {}) {
     orderBooks: {},
     headlines: [],
     events: [],
+    scenarioLab: {
+      history: [],
+      lastRun: null
+    },
     checkpoints: [],
     analytics: {
       alerts: [],

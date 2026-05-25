@@ -5,6 +5,7 @@ import { computeCompanyIntel, refreshMarketAnalytics, refreshPlayerAnalytics } f
 import { createCompany, createInitialState, createSeedCompanies, upsertCompany } from "../simulator/state.js";
 import { executeMerger, executeStrategicAction, placeOrder, runTick, squareOffPosition } from "../simulator/engine.js";
 import { fastForward, loadCheckpoint, saveCheckpoint } from "../simulator/persistence.js";
+import { listScenarioBlueprints, runScenarioPlaybook } from "../simulator/scenario-lab.js";
 
 const PORT = Number(process.env.PORT || 3000);
 const publicDir = path.resolve(process.cwd(), "src/web");
@@ -46,6 +47,10 @@ function getSnapshot() {
     player: state.player,
     alerts: state.analytics?.alerts ?? [],
     analytics: state.analytics ?? {},
+    scenarioLab: {
+      lastRun: state.scenarioLab?.lastRun ?? null,
+      recentRuns: state.scenarioLab?.history?.slice(0, 8) ?? []
+    },
     stocks: Object.entries(state.stocks).map(([companyId, stock]) => ({
       companyId,
       companyName: state.companies[companyId]?.name ?? companyId,
@@ -166,6 +171,24 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === "/api/alerts" && req.method === "GET") {
       return sendJson(res, 200, state.analytics?.alerts ?? []);
+    }
+
+    if (url.pathname === "/api/scenarios" && req.method === "GET") {
+      return sendJson(res, 200, {
+        scenarios: listScenarioBlueprints(),
+        lastRun: state.scenarioLab?.lastRun ?? null,
+        history: state.scenarioLab?.history?.slice(0, 10) ?? []
+      });
+    }
+
+    if (url.pathname === "/api/scenario/run" && req.method === "POST") {
+      const body = await readBody(req);
+      const run = runScenarioPlaybook(state, {
+        scenarioId: body.scenarioId ?? body.id,
+        intensity: body.intensity,
+        ticks: body.ticks
+      });
+      return sendJson(res, 200, { run, snapshot: getSnapshot() });
     }
 
     if (url.pathname === "/api/player/analytics" && req.method === "GET") {
