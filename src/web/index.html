@@ -226,8 +226,12 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 2px;
       }
+      .side-panel::-webkit-scrollbar { width: 5px; }
+      .side-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
       .side-header {
         display: flex;
         justify-content: space-between;
@@ -293,7 +297,29 @@
       input:focus, select:focus { border-color: var(--accent); }
       .btn-buy { background: linear-gradient(120deg, #1e6b3c, #39e0a2); border: 0; font-weight: 700; cursor: pointer; }
       .btn-sell { background: linear-gradient(120deg, #7a1c37, #ff7e98); border: 0; font-weight: 700; cursor: pointer; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
       .status-msg { min-height: 16px; margin-top: 6px; font-size: 11px; color: #8dc7ff; }
+      .tool-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+      }
+      .mini-btn {
+        padding: 6px 7px;
+        font-size: 10px;
+        font-weight: 700;
+        background: #0b1526;
+      }
+      .watch-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        border-bottom: 1px solid var(--line);
+        padding: 7px 0;
+      }
+      .watch-row:last-child { border-bottom: none; }
+      .watch-actions { display: flex; gap: 5px; }
       .idea-item {
         border: 1px solid var(--line);
         border-radius: 8px;
@@ -605,7 +631,7 @@
         }
         .chart-panel { grid-column: 1; grid-row: 1; }
         .stat-strip { grid-column: 1; grid-row: 2; grid-template-columns: repeat(3, 1fr); }
-        .side-panel { grid-column: 1; grid-row: 3; flex-direction: row; flex-wrap: wrap; max-height: none; }
+        .side-panel { grid-column: 1; grid-row: 3; flex-direction: row; flex-wrap: wrap; max-height: none; overflow: visible; }
         .stock-list { max-height: 300px; }
         .company-layout { grid-template-columns: 1fr; }
         .eco-grid { grid-template-columns: repeat(2, 1fr); }
@@ -702,6 +728,12 @@
           <div class="trade-row" style="margin-bottom:8px">
             <input id="tradePrice" type="number" step="0.0001" placeholder="Limit price" style="flex:1" disabled />
           </div>
+          <div class="tiny" id="tradeMechanism" style="margin-bottom:8px;line-height:1.4;color:var(--muted)">
+            Market orders fill immediately near live price. Limit orders wait until matching prices appear.
+          </div>
+          <div id="tradePreview" style="margin-bottom:8px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#0b1526;font-size:11px;color:var(--muted)">
+            Select quantity and order type to view execution preview.
+          </div>
           <div class="trade-row">
             <button class="btn-buy" id="btnBuy" style="flex:1;padding:8px">▲ Buy</button>
             <button class="btn-sell" id="btnSell" style="flex:1;padding:8px">▼ Sell</button>
@@ -711,7 +743,42 @@
               ⟲ Square Off Selected Position
             </button>
           </div>
+          <div class="tiny" id="squareOffHint" style="margin-top:4px;color:var(--muted)">
+            Square off closes your entire long/short position for the selected stock.
+          </div>
           <div class="status-msg" id="tradeStatus"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Smart Trade Tools</div>
+          <div class="tool-grid" style="margin-bottom:6px">
+            <button class="mini-btn" data-qty="25">Qty 25</button>
+            <button class="mini-btn" data-qty="100">Qty 100</button>
+            <button class="mini-btn" data-qty="500">Qty 500</button>
+            <button class="mini-btn" data-qty="1000">Qty 1K</button>
+          </div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <button id="btnQtyMaxBuy" style="flex:1">Max Buy Qty</button>
+            <button id="btnQtyClose" style="flex:1">Use Close Qty</button>
+          </div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <button id="btnLimitAtMarket" style="flex:1">Set Limit = Last Price</button>
+          </div>
+          <label class="tiny" style="display:flex;align-items:center;gap:6px">
+            <input id="enableHotkeys" type="checkbox" checked />
+            Enable hotkeys (Alt+B buy, Alt+S sell, Alt+X square-off, Alt+M max buy)
+          </label>
+          <div class="tiny" id="tradeToolSummary" style="margin-top:6px;color:var(--muted)">Loading trade tools…</div>
+        </div>
+
+        <div class="card" style="max-height:220px;overflow:auto">
+          <div class="card-title">Watchlist</div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <button id="btnWatchToggle" style="flex:1">Toggle Selected</button>
+            <button id="btnWatchClear" style="flex:1">Clear</button>
+          </div>
+          <div class="tiny" id="watchSummary">No watchlist items</div>
+          <div id="watchList" style="margin-top:6px"></div>
         </div>
 
         <div class="card">
@@ -1096,6 +1163,28 @@
       let selectedCompanyId = null;
       let chartMode = "stock";
       let currentInterval = 5; // sim-minute interval per group (5m/15m/1h/1d)
+      const WATCHLIST_STORAGE_KEY = "wfs-watchlist-v2";
+      let watchlistIds = [];
+
+      function loadWatchlist() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(WATCHLIST_STORAGE_KEY) ?? "[]");
+          if (!Array.isArray(parsed)) return [];
+          return parsed.filter((id) => typeof id === "string");
+        } catch {
+          return [];
+        }
+      }
+
+      function persistWatchlist() {
+        try {
+          localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlistIds));
+        } catch {
+          // ignore storage errors
+        }
+      }
+
+      watchlistIds = loadWatchlist();
 
       /* ── tab navigation ── */
       document.querySelectorAll(".tab").forEach((tab) => {
@@ -1410,6 +1499,108 @@
           : "<div class='tiny'>Keep monitoring flow and wait for clearer momentum or reversal signals.</div>";
       }
 
+      function renderTradeAssistant(state) {
+        const stocks = state.stocks ?? [];
+        const holdings = state.player?.holdings ?? {};
+        const companyId = $("tradeCompany").value;
+        const stock = stocks.find((s) => s.companyId === companyId);
+        const qty = Math.max(0, Number($("tradeQty").value || 0));
+        const orderType = $("tradeType").value === "market" ? "market" : "limit";
+        const limitPrice = Number($("tradePrice").value || 0);
+        const refPrice = orderType === "market"
+          ? Number(stock?.lastPrice ?? 0)
+          : Number.isFinite(limitPrice) && limitPrice > 0
+            ? limitPrice
+            : Number(stock?.lastPrice ?? 0);
+        const notional = qty * refPrice;
+        const holding = Number(holdings[companyId] ?? 0);
+        const absHolding = Math.abs(holding);
+        const cash = Number(state.player?.cash ?? 0);
+        const buyResulting = holding + qty;
+        const sellResulting = holding - qty;
+        const buyAction = holding < 0 ? "reduces short exposure first, then builds long exposure" : "adds to long exposure";
+        const sellAction = holding > 0 ? "reduces long exposure first, then can open short exposure" : "adds to short exposure";
+
+        $("tradeMechanism").textContent = `Buy ${buyAction}. Sell ${sellAction}. ${orderType === "market" ? "Market orders execute now using best available liquidity." : "Limit orders execute only when market reaches your limit price."}`;
+        $("tradePreview").textContent = qty > 0
+          ? `Preview: ${qty} shares × $${n(refPrice, 4)} ≈ ${fmtBig(notional)}. If filled, Buy position would become ${n(buyResulting, 0)} shares and Sell position would become ${n(sellResulting, 0)} shares. Wallet: ${fmtBig(cash)}.`
+          : `Set quantity above 0 to preview notional and resulting position impact. Wallet: ${fmtBig(cash)}.`;
+
+        $("btnSquareOff").disabled = !holding;
+        $("btnSquareOff").textContent = holding
+          ? `⟲ Square Off ${n(absHolding, 0)} share${absHolding === 1 ? "" : "s"} (${holding > 0 ? "sell" : "buy"} market)`
+          : "⟲ Square Off Selected Position";
+        $("squareOffHint").textContent = holding
+          ? `Square off will place one market ${holding > 0 ? "sell" : "buy"} for ${n(absHolding, 0)} shares to close this position.`
+          : "No open position on selected stock. Select a stock where you hold long or short shares.";
+      }
+
+      function renderTradeTools(state) {
+        const stocks = state.stocks ?? [];
+        const holdings = state.player?.holdings ?? {};
+        const companyId = $("tradeCompany").value;
+        const stock = stocks.find((s) => s.companyId === companyId);
+        const lastPrice = Number(stock?.lastPrice ?? 0);
+        const wallet = Number(state.player?.cash ?? 0);
+        const holding = Number(holdings[companyId] ?? 0);
+        const maxBuyQty = lastPrice > 0 ? Math.max(0, Math.floor(wallet / lastPrice)) : 0;
+        const closeQty = Math.max(0, Math.abs(holding));
+        $("btnQtyMaxBuy").disabled = maxBuyQty <= 0;
+        $("btnQtyClose").disabled = closeQty <= 0;
+        $("tradeToolSummary").textContent = `Helpers: max buy ${n(maxBuyQty, 0)} shares @ ~$${n(lastPrice, 4)} · close size ${n(closeQty, 0)} shares · watchlist ${watchlistIds.length} item(s).`;
+      }
+
+      function renderWatchlist(state) {
+        const stocks = state.stocks ?? [];
+        const watchStocks = watchlistIds
+          .map((id) => stocks.find((s) => s.companyId === id))
+          .filter(Boolean);
+        $("watchSummary").textContent = watchStocks.length
+          ? `${watchStocks.length} tracked stock${watchStocks.length > 1 ? "s" : ""}`
+          : "No watchlist items";
+        $("watchList").innerHTML = watchStocks.length
+          ? watchStocks
+              .map((s) => {
+                const chg = dayPriceChange(s);
+                return `
+                <div class="watch-row">
+                  <div>
+                    <div style="font-weight:700;font-size:12px">${s.ticker}</div>
+                    <div class="tiny">${s.companyName}</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-size:12px">$${n(s.lastPrice, 4)}</div>
+                    <div style="font-size:10px;color:${col(chg)}">${chg >= 0 ? "+" : ""}${pct(chg)}</div>
+                  </div>
+                  <div class="watch-actions">
+                    <button data-watch-focus="${s.companyId}" class="mini-btn">Focus</button>
+                    <button data-watch-remove="${s.companyId}" class="mini-btn">✕</button>
+                  </div>
+                </div>`;
+              })
+              .join("")
+          : "<div class='tiny'>Use “Toggle Selected” to track stocks you care about.</div>";
+
+        document.querySelectorAll("[data-watch-focus]").forEach((button) => {
+          button.addEventListener("click", () => {
+            selectedCompanyId = button.dataset.watchFocus;
+            $("tradeCompany").value = selectedCompanyId;
+            $("chartCompany").value = selectedCompanyId;
+            chartMode = "stock";
+            $("chartMode").value = "stock";
+            renderAll(latestState);
+          });
+        });
+
+        document.querySelectorAll("[data-watch-remove]").forEach((button) => {
+          button.addEventListener("click", () => {
+            watchlistIds = watchlistIds.filter((id) => id !== button.dataset.watchRemove);
+            persistWatchlist();
+            renderAll(latestState);
+          });
+        });
+      }
+
       /* ── RENDER TRADING PAGE ── */
       function renderTrading(state) {
         const stocks = state.stocks ?? [];
@@ -1498,11 +1689,12 @@
           const chg = dayPriceChange(s);
           const stab = s.stability ?? 0.5;
           const stabPct = Math.round(stab * 100);
+          const watched = watchlistIds.includes(s.companyId);
           return `
             <div class="stock-row ${s.companyId === selectedCompanyId ? "active" : ""}" data-id="${s.companyId}">
               <div class="stock-top">
                 <div>
-                  <div class="ticker">${s.ticker} ${stabBadge(stab)}</div>
+                  <div class="ticker">${watched ? "★ " : ""}${s.ticker} ${stabBadge(stab)}</div>
                   <div class="tiny">${s.companyName}</div>
                 </div>
                 <div style="text-align:right">
@@ -1581,6 +1773,7 @@
           ? portfolioRows.map((row) => `
             <div class="commodity-row">
               <span>${row.ticker} · ${n(Math.abs(row.qty), 0)} shares ${row.isShort ? "short" : "long"}</span>
+              <button class="portfolio-focus" data-id="${row.companyId}" style="padding:3px 7px;font-size:10px">Focus</button>
               <span style="color:${row.value >= 0 ? "var(--up)" : "var(--down)"}">${fmtBig(row.value)}</span>
             </div>
             <div class="tiny" style="margin:-3px 0 6px 0;color:var(--muted)">
@@ -1588,12 +1781,19 @@
             </div>
           `).join("")
           : "<div class='tiny'>Trade stock to see your portfolio positions here.</div>";
-
-        const selectedHolding = Number(holdings[$("tradeCompany").value] ?? 0);
-        $("btnSquareOff").disabled = !selectedHolding;
-        $("btnSquareOff").textContent = selectedHolding
-          ? `⟲ Square Off ${n(Math.abs(selectedHolding), 0)} share${Math.abs(selectedHolding) === 1 ? "" : "s"}`
-          : "⟲ Square Off Selected Position";
+        document.querySelectorAll(".portfolio-focus[data-id]").forEach((button) => {
+          button.addEventListener("click", () => {
+            selectedCompanyId = button.dataset.id;
+            $("tradeCompany").value = selectedCompanyId;
+            $("chartCompany").value = selectedCompanyId;
+            chartMode = "stock";
+            $("chartMode").value = "stock";
+            renderAll(latestState);
+          });
+        });
+        renderTradeAssistant(state);
+        renderTradeTools(state);
+        renderWatchlist(state);
 
         renderMarketIdeas(state);
       }
@@ -2081,10 +2281,85 @@
 
       $("tradeType").addEventListener("change", () => {
         $("tradePrice").disabled = $("tradeType").value === "market";
+        if (latestState) renderTradeAssistant(latestState);
+        if (latestState) renderTradeTools(latestState);
       });
       $("tradeCompany").addEventListener("change", () => {
         selectedCompanyId = $("tradeCompany").value;
         if (latestState) renderAll(latestState);
+      });
+      $("tradeQty").addEventListener("input", () => {
+        if (latestState) renderTradeAssistant(latestState);
+        if (latestState) renderTradeTools(latestState);
+      });
+      $("tradePrice").addEventListener("input", () => {
+        if (latestState) renderTradeAssistant(latestState);
+      });
+      document.querySelectorAll(".mini-btn[data-qty]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          $("tradeQty").value = String(Number(btn.dataset.qty || 0));
+          if (latestState) renderTradeAssistant(latestState);
+          if (latestState) renderTradeTools(latestState);
+        });
+      });
+      $("btnQtyMaxBuy").addEventListener("click", () => {
+        if (!latestState) return;
+        const stock = (latestState.stocks ?? []).find((s) => s.companyId === $("tradeCompany").value);
+        const lastPrice = Number(stock?.lastPrice ?? 0);
+        const wallet = Number(latestState.player?.cash ?? 0);
+        const maxBuyQty = lastPrice > 0 ? Math.max(0, Math.floor(wallet / lastPrice)) : 0;
+        $("tradeQty").value = String(maxBuyQty);
+        renderTradeAssistant(latestState);
+        renderTradeTools(latestState);
+      });
+      $("btnQtyClose").addEventListener("click", () => {
+        if (!latestState) return;
+        const holdings = latestState.player?.holdings ?? {};
+        const holding = Math.abs(Number(holdings[$("tradeCompany").value] ?? 0));
+        $("tradeQty").value = String(holding);
+        renderTradeAssistant(latestState);
+        renderTradeTools(latestState);
+      });
+      $("btnLimitAtMarket").addEventListener("click", () => {
+        if (!latestState) return;
+        const stock = (latestState.stocks ?? []).find((s) => s.companyId === $("tradeCompany").value);
+        $("tradeType").value = "limit";
+        $("tradePrice").disabled = false;
+        $("tradePrice").value = Number(stock?.lastPrice ?? 0).toFixed(4);
+        renderTradeAssistant(latestState);
+      });
+      $("btnWatchToggle").addEventListener("click", () => {
+        const companyId = $("tradeCompany").value;
+        if (!companyId) return;
+        if (watchlistIds.includes(companyId)) watchlistIds = watchlistIds.filter((id) => id !== companyId);
+        else watchlistIds = [...watchlistIds, companyId];
+        persistWatchlist();
+        if (latestState) renderAll(latestState);
+      });
+      $("btnWatchClear").addEventListener("click", () => {
+        watchlistIds = [];
+        persistWatchlist();
+        if (latestState) renderAll(latestState);
+      });
+      document.addEventListener("keydown", (event) => {
+        if (!$("enableHotkeys")?.checked) return;
+        const tag = String(event.target?.tagName ?? "").toLowerCase();
+        if (tag === "input" || tag === "textarea" || tag === "select") return;
+        if (!event.altKey) return;
+        const key = String(event.key ?? "").toLowerCase();
+        if (key === "b") {
+          event.preventDefault();
+          postOrder("buy");
+        } else if (key === "s") {
+          event.preventDefault();
+          postOrder("sell");
+        } else if (key === "x") {
+          event.preventDefault();
+          squareOffSelectedPosition();
+        } else if (key === "m") {
+          event.preventDefault();
+          $("btnQtyMaxBuy").click();
+        }
       });
 
       async function postOrder(side) {
