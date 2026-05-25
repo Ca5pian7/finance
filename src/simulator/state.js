@@ -62,6 +62,25 @@ export function createInitialState({ seed = 42 } = {}) {
       retailLiquidity: 900_000_000_000,
       aiBotAggression: 0.42
     },
+    financialSystem: {
+      bankingStress: 0.22,
+      housingIndex: 100,
+      sovereignDebtToGdp: 0.78,
+      privateCreditStress: 0.18,
+      ventureCapitalDryPowder: 520_000_000_000,
+      ipoPipeline: [],
+      etfs: [],
+      hedgeFunds: [
+        { id: "hf-quant", name: "Atlas Quantum", strategy: "quant", aum: 240_000_000_000, grossExposure: 1.6, leverage: 2.1, pnlPct: 0 },
+        { id: "hf-macro", name: "Macro Horizon", strategy: "macro", aum: 170_000_000_000, grossExposure: 1.3, leverage: 1.7, pnlPct: 0 },
+        { id: "hf-longshort", name: "Titan Long/Short", strategy: "equity-ls", aum: 130_000_000_000, grossExposure: 1.85, leverage: 2.4, pnlPct: 0 }
+      ],
+      stats: {
+        etfAssets: 0,
+        ipoCount: 0,
+        largestEtf: null
+      }
+    },
     indexes: {
       GLOBAL100: { value: 1000, changePct: 0, members: [] },
       GLOBAL50: { value: 1000, changePct: 0, members: [] },

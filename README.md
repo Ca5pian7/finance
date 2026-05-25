@@ -31,6 +31,11 @@ This repository now contains an executable V10 foundation for a realistic global
 - Funds/index layer (institutional/hedge/retail liquidity + valuation-weighted GLOBAL100 and GLOBAL ALL indexes)
   - Added valuation-weighted GLOBAL50 index and per-index constituent weight snapshots
   - Added valuation-weighted NASDAQ100 index with candle history for dashboard charting
+- Financial-system layer
+  - Banking stress, private credit stress, sovereign debt-to-GDP, housing index, VC dry powder
+  - IPO pipeline queue with automatic listing execution during favorable windows
+  - ETF registry with sector/country/index benchmark flows and market-coupled momentum effects
+  - Hedge fund telemetry (strategy, AUM, leverage, gross exposure, rolling PnL)
 - Corporate mergers with delisting outcomes and leaderboard progression
 - Competitive strategy layer upgrades
   - Price-war action against specific competitors
@@ -130,13 +135,14 @@ npm run simulate
 - `GET /api/rankings/sectors` — sector leadership table
 - `GET /api/rankings/countries` — country leadership table
 - `GET /api/supply-risk` — supply region heat-map and route diagnostics
+- `GET /api/financial-system` — banking/credit/housing/ETF/IPO/hedge-fund system snapshot
 - `GET /api/company/intelligence?companyId=<id>` — derived company scorecard and signals
 - `POST /api/company` — create company (supports playerOwned/principalStakePct)
 - `POST /api/order` — place order
 - `POST /api/scenario/run` — execute a scenario playbook (`scenarioId`, optional `intensity`, optional `ticks`)
 - `POST /api/tick` — run one tick with optional events
 - `POST /api/fast-forward` — run multiple ticks quickly
-- `POST /api/action` — execute strategic actions (product launch, market manipulation, acquisitions, VC raise, factories, logistics, policy influence, monopolies, price wars, global expansion, economic war)
+- `POST /api/action` — execute strategic actions (product launch, market manipulation, acquisitions, VC raise, factories, logistics, policy influence, monopolies, price wars, global expansion, economic war, IPO filing, ETF launch, share buybacks)
 
 Example event payload for `/api/tick`:
 

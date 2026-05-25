@@ -183,6 +183,60 @@ test("strategic action can expand global operations and increase company scale",
   assert.ok(state.headlines.some((h) => /expands operations/i.test(h.headline)));
 });
 
+test("strategic action can file IPO and queue listing pipeline", () => {
+  const state = createInitialState({ seed: 133 });
+  upsertCompany(state, createCompany({ id: "ipo", name: "Listing Forge", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  const result = executeStrategicAction(state, {
+    actionType: "FILE_IPO",
+    companyId: "ipo",
+    targetRaise: 420_000_000
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(state.financialSystem.ipoPipeline.length, 1);
+  assert.equal(state.financialSystem.ipoPipeline[0].companyId, "ipo");
+  assert.ok(state.headlines.some((h) => /files for IPO/i.test(h.headline)));
+});
+
+test("strategic action can launch ETF and register it in financial system", () => {
+  const state = createInitialState({ seed: 134 });
+  upsertCompany(state, createCompany({ id: "etf", name: "Index Forge", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  const result = executeStrategicAction(state, {
+    actionType: "LAUNCH_ETF",
+    companyId: "etf",
+    mode: "sector",
+    benchmark: "AI",
+    seedAum: 3_000_000_000
+  });
+
+  assert.equal(result.status, "ok");
+  assert.ok(result.etfId);
+  assert.equal(state.financialSystem.etfs.length, 1);
+  assert.equal(state.financialSystem.etfs[0].benchmark, "AI");
+  assert.ok(state.headlines.some((h) => /launches/i.test(h.headline)));
+});
+
+test("strategic action buyback reduces share count and supports price metrics", () => {
+  const state = createInitialState({ seed: 135 });
+  upsertCompany(state, createCompany({ id: "bb", name: "Capital Return", country: "USA", sector: "Banking", businessModel: "B2B" }));
+  const beforeShares = state.stocks.bb.sharesOutstanding;
+  const beforeCap = state.stocks.bb.marketCap;
+
+  const result = executeStrategicAction(state, {
+    actionType: "RUN_BUYBACK",
+    companyId: "bb",
+    buybackPct: 2.5
+  });
+
+  assert.equal(result.status, "ok");
+  assert.ok(state.stocks.bb.sharesOutstanding < beforeShares);
+  assert.ok(state.stocks.bb.marketCap > 0);
+  assert.notEqual(state.stocks.bb.marketCap, beforeCap);
+  assert.ok(state.headlines.some((h) => /buyback/i.test(h.headline)));
+});
+
 test("market session advances with day/night cycle and high participant population", () => {
   const state = createInitialState({ seed: 9 });
   upsertCompany(state, createCompany({ id: "m1", name: "Session Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));
@@ -199,6 +253,21 @@ test("market session advances with day/night cycle and high participant populati
   assert.equal(state.marketSession.dayNumber, 2);
   assert.ok(state.stocks.m1.stability >= 0.1 && state.stocks.m1.stability <= 0.98);
   assert.ok(state.stocks.m1.buyPressure >= 0.05 && state.stocks.m1.buyPressure <= 0.95);
+});
+
+test("financial system evolves on tick and tracks ETF/IPO summary stats", () => {
+  const state = createInitialState({ seed: 136 });
+  upsertCompany(state, createCompany({ id: "fs1", name: "Macro Signals", country: "USA", sector: "AI", businessModel: "SaaS" }));
+  executeStrategicAction(state, { actionType: "LAUNCH_ETF", companyId: "fs1", mode: "sector", benchmark: "AI", seedAum: 2_000_000_000 });
+  executeStrategicAction(state, { actionType: "FILE_IPO", companyId: "fs1", targetRaise: 500_000_000 });
+
+  runTick(state);
+
+  assert.ok(state.financialSystem.bankingStress >= 0.02 && state.financialSystem.bankingStress <= 1);
+  assert.ok(state.financialSystem.privateCreditStress >= 0.02 && state.financialSystem.privateCreditStress <= 1);
+  assert.ok(state.financialSystem.housingIndex >= 45);
+  assert.ok(state.financialSystem.stats.etfAssets >= 2_000_000_000);
+  assert.ok(state.financialSystem.stats.ipoCount >= 0);
 });
 
 test("inflation and policy rate can move both up and down over time", () => {
