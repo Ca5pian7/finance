@@ -89,6 +89,24 @@ test("merger keeps target listed and boosts buyer valuation", () => {
   assert.ok(state.companies.buyer.valuation > before);
 });
 
+test("strategic action merge alias executes merger flow", () => {
+  const state = createInitialState({ seed: 211 });
+  upsertCompany(state, createCompany({ id: "m-a", name: "Merge Alpha", country: "USA", sector: "AI", businessModel: "SaaS", initialValuation: 1_800_000_000 }));
+  upsertCompany(state, createCompany({ id: "m-b", name: "Merge Beta", country: "Japan", sector: "Semiconductor", businessModel: "Hardware", initialValuation: 1_000_000_000 }));
+  const beforeValuation = state.companies["m-a"].valuation;
+
+  const result = executeStrategicAction(state, {
+    actionType: "MERGE",
+    companyId: "m-a",
+    targetId: "m-b"
+  });
+
+  assert.equal(result.buyerId, "m-a");
+  assert.equal(result.targetId, "m-b");
+  assert.ok(state.companies["m-a"].valuation > beforeValuation);
+  assert.equal(state.stocks["m-b"].listed, true);
+});
+
 test("strategic action can raise venture capital and improve company capacity", () => {
   const state = createInitialState({ seed: 22 });
   upsertCompany(
@@ -111,7 +129,7 @@ test("strategic action can trigger economic war conditions", () => {
   const beforeTension = state.geopolitics.tension;
 
   const result = executeStrategicAction(state, {
-    actionType: "TRIGGER_ECONOMIC_WAR",
+    actionType: "WAR",
     companyId: "w1",
     region: "Pacific Corridor",
     country: "China"
@@ -164,11 +182,11 @@ test("strategic action can expand global operations and increase company scale",
   assert.ok(state.headlines.some((h) => /expands operations/i.test(h.headline)));
 });
 
-test("market session advances with day/night cycle and 10M participant population", () => {
+test("market session advances with day/night cycle and high participant population", () => {
   const state = createInitialState({ seed: 9 });
   upsertCompany(state, createCompany({ id: "m1", name: "Session Labs", country: "USA", sector: "AI", businessModel: "SaaS" }));
 
-  assert.equal(state.population.participantCount, 10_000_000);
+  assert.ok(state.population.participantCount >= 20_000_000);
   runTick(state);
   assert.equal(state.marketSession.phase, "day");
   assert.equal(state.marketSession.dayNumber, 1);

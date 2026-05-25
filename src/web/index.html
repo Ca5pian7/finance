@@ -820,6 +820,7 @@
               <option value="MANAGE_LOGISTICS">Manage Logistics</option>
               <option value="CREATE_MONOPOLY">Compete Aggressively</option>
               <option value="COMPETE_PRICE_WAR">Start Price War</option>
+              <option value="TRIGGER_ECONOMIC_WAR">Trigger Economic War</option>
               <option value="EXPAND_GLOBAL_OPERATIONS">Expand Globally</option>
               <option value="ACQUIRE_COMPETITOR">Merge / Acquire Competitor</option>
             </select>
@@ -2526,6 +2527,13 @@
             if (actionType === "ACQUIRE_COMPETITOR") payload.buyerId = companyId;
             payload.targetId = $("actionTarget").value;
             if (!payload.targetId) throw new Error("Select a target competitor");
+          }
+          if (actionType === "TRIGGER_ECONOMIC_WAR") {
+            const targetId = $("actionTarget").value;
+            const aggressor = latestState?.companies?.find((c) => c.id === companyId);
+            const target = latestState?.companies?.find((c) => c.id === targetId);
+            payload.region = `${aggressor?.country ?? "Global"}-${target?.country ?? "Trade"} corridor`;
+            payload.country = target?.country ?? "Major economy";
           }
           const res = await fetch("/api/action", {
             method: "POST",
