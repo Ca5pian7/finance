@@ -622,6 +622,44 @@
       .toast.high { border-color: #ffb347aa; }
       .toast .tiny { display: block; margin-top: 4px; }
 
+      /* ── TRADE FLOW + STOCK CONTROL PAGES ── */
+      .flow-grid,
+      .control-grid {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr;
+        gap: 12px;
+      }
+      .flow-step {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        background: #0b1424b3;
+      }
+      .step-num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        background: #1a2f50;
+        color: var(--accent);
+        font-weight: 800;
+        font-size: 11px;
+        margin-right: 6px;
+      }
+      .meter-lg {
+        width: 100%;
+        height: 12px;
+        border-radius: 999px;
+        background: #1a2f50;
+        overflow: hidden;
+      }
+      .meter-lg-fill {
+        height: 100%;
+        transition: width .4s;
+      }
+
       /* ── RESPONSIVE ── */
       @media (max-width: 1100px) {
         #page-trading {
@@ -638,6 +676,8 @@
         .eco-row { grid-template-columns: 1fr; }
         .country-grid { grid-template-columns: repeat(2, 1fr); }
         .markets-top { grid-template-columns: repeat(2, 1fr); }
+        .flow-grid,
+        .control-grid { grid-template-columns: 1fr; }
         .toast-stack { position: static; width: 100%; margin: 12px 18px 0; }
       }
       @media (max-width: 700px) {
@@ -666,8 +706,10 @@
     <!-- TABS -->
     <nav class="tabs">
       <div class="tab active" data-tab="trading">📈 Trading</div>
+      <div class="tab" data-tab="trade-flow">🧭 Trade Flow</div>
       <div class="tab" data-tab="markets">🏦 Markets</div>
       <div class="tab" data-tab="company">🏢 Company</div>
+      <div class="tab" data-tab="control">🎛️ Stock Control</div>
       <div class="tab" data-tab="economy">🌐 Economy</div>
       <div class="tab" data-tab="portfolio">💼 Portfolio</div>
     </nav>
@@ -783,59 +825,14 @@
         </div>
 
         <div class="card">
-          <div class="card-title">Build Your Company</div>
-          <div class="trade-row" style="margin-bottom:6px">
-            <input id="newCompanyName" type="text" placeholder="Company name" style="flex:1" />
-            <input id="newCompanyValuation" type="number" min="1000000" step="1000000" value="500000000" style="flex:1" />
+          <div class="card-title">Trading Workspace</div>
+          <div class="tiny" style="line-height:1.45;margin-bottom:8px">
+            Open <b>Trade Flow</b> for guided buying/selling and <b>Stock Control</b> for company creation, business actions, and stability tuning.
           </div>
-          <div class="trade-row" style="margin-bottom:6px">
-            <input id="newCompanyCountry" type="text" placeholder="Country (e.g. USA)" value="USA" style="flex:1" />
-            <input id="newCompanySector" type="text" placeholder="Sector (e.g. AI)" value="AI" style="flex:1" />
+          <div class="trade-row">
+            <button id="openTradeFlowFromTrading" style="flex:1">Open Trade Flow</button>
+            <button id="openControlFromTrading" style="flex:1">Open Stock Control</button>
           </div>
-          <div class="trade-row" style="margin-bottom:6px">
-            <input id="newCompanyModel" type="text" placeholder="Business model" value="SaaS" style="flex:1" />
-            <input id="newCompanyEmployees" type="number" min="10" step="10" value="500" style="flex:1" />
-          </div>
-          <div class="trade-row" style="margin-bottom:6px">
-            <label class="tiny" style="display:flex;align-items:center;gap:6px;flex:1">
-              <input id="newCompanyPlayerOwned" type="checkbox" checked />
-              Set as my company
-            </label>
-            <input id="newCompanyOwnershipPct" type="number" min="10" max="95" step="1" value="67" style="flex:1" placeholder="Ownership %" />
-          </div>
-          <button id="btnCreateCompany" style="width:100%;padding:8px;border:0;background:linear-gradient(120deg,#20558f,#64a9ff);color:white;font-weight:700;cursor:pointer">
-            + Create Company
-          </button>
-          <div class="status-msg" id="companyCreateStatus"></div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">Business Actions</div>
-          <div class="trade-row" style="margin-bottom:6px">
-            <select id="actionCompany" style="flex:1"></select>
-            <select id="actionType" style="flex:1">
-              <option value="LAUNCH_PRODUCT">Launch Product</option>
-              <option value="RAISE_VENTURE_CAPITAL">Raise Venture Capital</option>
-              <option value="BUILD_FACTORY">Build Factory</option>
-              <option value="MANAGE_LOGISTICS">Manage Logistics</option>
-              <option value="FILE_IPO">File IPO</option>
-              <option value="LAUNCH_ETF">Launch ETF</option>
-              <option value="RUN_BUYBACK">Run Share Buyback</option>
-              <option value="CREATE_MONOPOLY">Compete Aggressively</option>
-              <option value="COMPETE_PRICE_WAR">Start Price War</option>
-              <option value="TRIGGER_ECONOMIC_WAR">Trigger Economic War</option>
-              <option value="EXPAND_GLOBAL_OPERATIONS">Expand Globally</option>
-              <option value="ACQUIRE_COMPETITOR">Merge / Acquire Competitor</option>
-            </select>
-          </div>
-          <div class="trade-row" style="margin-bottom:6px">
-            <select id="actionTarget" style="flex:1"></select>
-            <input id="actionIntensity" type="number" min="0.5" max="5" step="0.1" value="1" style="flex:1" />
-          </div>
-          <button id="btnRunAction" style="width:100%;padding:8px;border:0;background:linear-gradient(120deg,#5b2c94,#b88cff);color:white;font-weight:700;cursor:pointer">
-            Run Business Action
-          </button>
-          <div class="status-msg" id="actionStatus"></div>
         </div>
 
         <div class="card" style="max-height:220px;overflow:auto">
@@ -1004,6 +1001,152 @@
           <div class="card">
             <div class="card-title">Company Info</div>
             <div id="cInfo"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PAGE: TRADE FLOW ════════ -->
+    <div id="page-trade-flow" class="page">
+      <div class="flow-grid">
+        <div class="card">
+          <div class="card-title">Guided Buying / Selling Flow</div>
+          <div class="flow-step" style="margin-bottom:8px">
+            <div><span class="step-num">1</span><b>Choose stock</b></div>
+            <div class="tiny" style="margin-top:6px" id="flowSelectedTicker">--</div>
+          </div>
+          <div class="flow-step" style="margin-bottom:8px">
+            <div><span class="step-num">2</span><b>Select order type and quantity</b></div>
+            <div class="tiny" style="margin-top:6px" id="flowOrderPreview">--</div>
+          </div>
+          <div class="flow-step" style="margin-bottom:8px">
+            <div><span class="step-num">3</span><b>Review support / resistance zones</b></div>
+            <div class="tiny" style="margin-top:6px" id="flowLevels">--</div>
+          </div>
+          <div class="flow-step">
+            <div><span class="step-num">4</span><b>Execute from trading panel</b></div>
+            <div class="trade-row" style="margin-top:8px">
+              <button id="flowStartBuy" style="flex:1">Prepare Buy</button>
+              <button id="flowStartSell" style="flex:1">Prepare Sell</button>
+              <button id="flowSetLimit" style="flex:1">Use Limit @ Market</button>
+            </div>
+            <div class="status-msg" id="flowStatus"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Live Position Snapshot</div>
+          <div id="flowPosition" class="tiny" style="line-height:1.5;margin-bottom:10px">--</div>
+          <div class="meter-row">
+            <div class="meter-label">Stability</div>
+            <div class="meter-bar"><div class="meter-fill" id="flowStabilityBar" style="width:0%;background:var(--accent)"></div></div>
+            <div class="meter-val" id="flowStabilityVal">--</div>
+          </div>
+          <div class="meter-row">
+            <div class="meter-label">Buy Pressure</div>
+            <div class="meter-bar"><div class="meter-fill" id="flowBuyBar" style="width:0%;background:var(--up)"></div></div>
+            <div class="meter-val" id="flowBuyVal">--</div>
+          </div>
+          <div class="meter-row">
+            <div class="meter-label">Sell Pressure</div>
+            <div class="meter-bar"><div class="meter-fill" id="flowSellBar" style="width:0%;background:var(--down)"></div></div>
+            <div class="meter-val" id="flowSellVal">--</div>
+          </div>
+          <div class="tiny" style="margin-top:10px;color:var(--muted)">
+            Tip: higher stability usually means smaller random swings, while low stability can widen intraday moves.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PAGE: STOCK CONTROL ════════ -->
+    <div id="page-control" class="page">
+      <div class="control-grid">
+        <div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Create Company</div>
+            <div class="trade-row" style="margin-bottom:6px">
+              <input id="newCompanyName" type="text" placeholder="Company name" style="flex:1" />
+              <input id="newCompanyValuation" type="number" min="1000000" step="1000000" value="500000000" style="flex:1" />
+            </div>
+            <div class="trade-row" style="margin-bottom:6px">
+              <input id="newCompanyCountry" type="text" placeholder="Country (e.g. USA)" value="USA" style="flex:1" />
+              <input id="newCompanySector" type="text" placeholder="Sector (e.g. AI)" value="AI" style="flex:1" />
+            </div>
+            <div class="trade-row" style="margin-bottom:6px">
+              <input id="newCompanyModel" type="text" placeholder="Business model" value="SaaS" style="flex:1" />
+              <input id="newCompanyEmployees" type="number" min="10" step="10" value="500" style="flex:1" />
+            </div>
+            <div class="trade-row" style="margin-bottom:6px">
+              <label class="tiny" style="display:flex;align-items:center;gap:6px;flex:1">
+                <input id="newCompanyPlayerOwned" type="checkbox" checked />
+                Set as my company
+              </label>
+              <input id="newCompanyOwnershipPct" type="number" min="10" max="95" step="1" value="67" style="flex:1" placeholder="Ownership %" />
+            </div>
+            <button id="btnCreateCompany" style="width:100%;padding:8px;border:0;background:linear-gradient(120deg,#20558f,#64a9ff);color:white;font-weight:700;cursor:pointer">
+              + Create Company
+            </button>
+            <div class="status-msg" id="companyCreateStatus"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Business Actions</div>
+            <div class="trade-row" style="margin-bottom:6px">
+              <select id="actionCompany" style="flex:1"></select>
+              <select id="actionType" style="flex:1">
+                <option value="LAUNCH_PRODUCT">Launch Product</option>
+                <option value="RAISE_VENTURE_CAPITAL">Raise Venture Capital</option>
+                <option value="BUILD_FACTORY">Build Factory</option>
+                <option value="MANAGE_LOGISTICS">Manage Logistics</option>
+                <option value="FILE_IPO">File IPO</option>
+                <option value="LAUNCH_ETF">Launch ETF</option>
+                <option value="RUN_BUYBACK">Run Share Buyback</option>
+                <option value="CREATE_MONOPOLY">Compete Aggressively</option>
+                <option value="COMPETE_PRICE_WAR">Start Price War</option>
+                <option value="TRIGGER_ECONOMIC_WAR">Trigger Economic War</option>
+                <option value="EXPAND_GLOBAL_OPERATIONS">Expand Globally</option>
+                <option value="ACQUIRE_COMPETITOR">Merge / Acquire Competitor</option>
+              </select>
+            </div>
+            <div class="trade-row" style="margin-bottom:6px">
+              <select id="actionTarget" style="flex:1"></select>
+              <input id="actionIntensity" type="number" min="0.5" max="5" step="0.1" value="1" style="flex:1" />
+            </div>
+            <button id="btnRunAction" style="width:100%;padding:8px;border:0;background:linear-gradient(120deg,#5b2c94,#b88cff);color:white;font-weight:700;cursor:pointer">
+              Run Business Action
+            </button>
+            <div class="status-msg" id="actionStatus"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Stock Stability Meter Control</div>
+          <div class="trade-row" style="margin-bottom:8px">
+            <select id="ctrlCompany" style="flex:1"></select>
+          </div>
+          <div class="tiny" id="ctrlCompanyInfo" style="margin-bottom:8px;color:var(--muted)">--</div>
+          <div class="tiny" style="margin-bottom:4px">Stability Target</div>
+          <div class="meter-lg" style="margin-bottom:6px">
+            <div class="meter-lg-fill" id="ctrlStabilityMeter" style="width:0%;background:var(--accent)"></div>
+          </div>
+          <div class="trade-row" style="margin-bottom:8px">
+            <input id="ctrlStability" type="range" min="20" max="98" step="1" value="70" style="flex:1" />
+            <input id="ctrlStabilityValue" type="number" min="20" max="98" step="1" value="70" style="width:88px" />
+          </div>
+          <div class="trade-row" style="margin-bottom:6px">
+            <input id="ctrlSupport" type="number" step="0.0001" placeholder="Support price" style="flex:1" />
+            <input id="ctrlResistance" type="number" step="0.0001" placeholder="Resistance price" style="flex:1" />
+          </div>
+          <div class="trade-row" style="margin-bottom:8px">
+            <input id="ctrlSupportStrength" type="number" min="20" max="98" step="1" value="72" placeholder="Support strength %" style="flex:1" />
+            <input id="ctrlResistanceStrength" type="number" min="20" max="98" step="1" value="72" placeholder="Resistance strength %" style="flex:1" />
+          </div>
+          <button id="btnApplyStockControl" style="width:100%;padding:8px;border:0;background:linear-gradient(120deg,#1f6a73,#46d7e0);color:white;font-weight:700;cursor:pointer">
+            Apply Stability / Levels
+          </button>
+          <div class="status-msg" id="controlStatus"></div>
+          <div class="tiny" id="ctrlHint" style="margin-top:8px;color:var(--muted)">
+            You can directly tune stability, support, and resistance for the selected stock.
           </div>
         </div>
       </div>
@@ -1241,7 +1384,7 @@
 
       function tabFromHash() {
         const hashTab = window.location.hash.replace(/^#/, "").trim().toLowerCase();
-        return ["trading", "markets", "company", "economy", "portfolio"].includes(hashTab) ? hashTab : "trading";
+        return ["trading", "trade-flow", "markets", "company", "control", "economy", "portfolio"].includes(hashTab) ? hashTab : "trading";
       }
 
       document.querySelectorAll(".tab").forEach((tab) => {
@@ -1287,8 +1430,9 @@
       }
 
       function getGroupSize(intervalMins) {
-        // 1 tick ≈ 4.8 sim-minutes
-        return Math.max(1, Math.round(intervalMins / 4.8));
+        const ticksPerDay = Math.max(1, Number(latestState?.marketSession?.ticksPerDay ?? 300));
+        const simMinutesPerTick = 1440 / ticksPerDay;
+        return Math.max(1, Math.round(intervalMins / simMinutesPerTick));
       }
 
       function intervalLabel(intervalMins) {
@@ -1313,7 +1457,13 @@
 
         const raw = stock.candles ?? [];
         const groupSize = getGroupSize(currentInterval);
-        const candles = aggregateCandles(raw, groupSize).slice(-100);
+        let candles = aggregateCandles(raw, groupSize);
+        if (candles.length < 20 && raw.length >= 20 && groupSize > 1) {
+          const adaptiveGroup = Math.max(1, Math.floor(raw.length / 20));
+          candles = aggregateCandles(raw, adaptiveGroup);
+        }
+        const maxBars = currentInterval >= 1440 ? 180 : 120;
+        candles = candles.slice(-maxBars);
         if (!candles.length) {
           ctx.fillStyle = "var(--muted)";
           ctx.font = "14px Inter, system-ui";
@@ -1606,6 +1756,53 @@
         $("btnQtyMaxBuy").disabled = maxBuyQty <= 0;
         $("btnQtyClose").disabled = closeQty <= 0;
         $("tradeToolSummary").textContent = `Helpers: max buy ${n(maxBuyQty, 0)} shares @ ~$${n(lastPrice, 4)} · close size ${n(closeQty, 0)} shares · watchlist ${watchlistIds.length} item(s).`;
+      }
+
+      function renderTradeFlow(state) {
+        const stock = getSelectedStock(state);
+        if (!stock) return;
+        const holdings = state.player?.holdings ?? {};
+        const qtyHeld = Number(holdings[stock.companyId] ?? 0);
+        const tradeQty = Math.max(0, Number($("tradeQty").value || 0));
+        const orderType = $("tradeType").value === "limit" ? "Limit" : "Market";
+        const limitPrice = Number($("tradePrice").value || 0);
+        const refPrice = orderType === "Limit" && limitPrice > 0 ? limitPrice : Number(stock.lastPrice ?? 0);
+        const notional = tradeQty * refPrice;
+        const stab = Math.round(Number(stock.stability ?? 0.5) * 100);
+        const bp = Math.round(Number(stock.buyPressure ?? 0.5) * 100);
+        const sp = Math.round(Number(stock.sellPressure ?? 0.5) * 100);
+
+        $("flowSelectedTicker").textContent = `${stock.ticker} · ${stock.companyName} · Last $${n(stock.lastPrice, 4)}`;
+        $("flowOrderPreview").textContent = `${orderType} order · Qty ${n(tradeQty, 0)} · Est. notional ${fmtBig(notional)}.`;
+        $("flowLevels").textContent = `Support $${n(stock.support ?? 0, 4)} · Resistance $${n(stock.resistance ?? 0, 4)} · Stability ${stab}%.`;
+        $("flowPosition").textContent = `Current position: ${n(qtyHeld, 0)} shares · Wallet ${fmtBig(state.player?.cash ?? 0)} · Day move ${pct(Math.abs(dayPriceChange(stock)))}.`;
+        $("flowStabilityBar").style.width = `${stab}%`;
+        $("flowStabilityBar").style.background = stabColor((stock.stability ?? 0.5));
+        $("flowStabilityVal").textContent = `${stab}%`;
+        $("flowBuyBar").style.width = `${bp}%`;
+        $("flowBuyVal").textContent = `${bp}%`;
+        $("flowSellBar").style.width = `${sp}%`;
+        $("flowSellVal").textContent = `${sp}%`;
+      }
+
+      function renderStockControlPage(state) {
+        const stocks = state.stocks ?? [];
+        const options = stocks.map((s) => `<option value="${s.companyId}">${s.ticker} – ${s.companyName}</option>`).join("");
+        if ($("ctrlCompany").innerHTML !== options) $("ctrlCompany").innerHTML = options;
+        if (selectedCompanyId && stocks.some((s) => s.companyId === selectedCompanyId)) $("ctrlCompany").value = selectedCompanyId;
+        const stock = stocks.find((s) => s.companyId === $("ctrlCompany").value) ?? stocks[0];
+        if (!stock) return;
+        selectedCompanyId = stock.companyId;
+        $("ctrlCompanyInfo").textContent = `${stock.companyName} · Last $${n(stock.lastPrice, 4)} · Support $${n(stock.support ?? 0, 4)} · Resistance $${n(stock.resistance ?? 0, 4)}`;
+        const stabilityPct = Math.round(Number(stock.stability ?? 0.7) * 100);
+        $("ctrlStability").value = String(stabilityPct);
+        $("ctrlStabilityValue").value = String(stabilityPct);
+        $("ctrlSupport").value = Number(stock.support ?? 0).toFixed(4);
+        $("ctrlResistance").value = Number(stock.resistance ?? 0).toFixed(4);
+        $("ctrlSupportStrength").value = String(Math.round(Number(stock.supportStrength ?? 0.72) * 100));
+        $("ctrlResistanceStrength").value = String(Math.round(Number(stock.resistanceStrength ?? 0.72) * 100));
+        $("ctrlStabilityMeter").style.width = `${stabilityPct}%`;
+        $("ctrlStabilityMeter").style.background = stabColor(Number(stock.stability ?? 0.7));
       }
 
       function buildPortfolioRows(state, stocks) {
@@ -2104,6 +2301,10 @@
           <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px;color:var(--muted)">
             <span>Buy ${bpPct}%</span>
             <span>Sell ${100 - bpPct}%</span>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <span>Support $${n(sel.support ?? 0, 4)} · Strength ${n((sel.supportStrength ?? 0.72) * 100, 0)}%</span>
+            <span>Resistance $${n(sel.resistance ?? 0, 4)} · Strength ${n((sel.resistanceStrength ?? 0.72) * 100, 0)}%</span>
           </div>`;
 
         // order depth
@@ -2386,8 +2587,10 @@
 
         const activePage = document.querySelector(".tab.active")?.dataset?.tab ?? "trading";
         if (activePage === "trading") renderTrading(state);
+        else if (activePage === "trade-flow") renderTradeFlow(state);
         else if (activePage === "markets") renderMarkets(state);
         else if (activePage === "company") renderCompany(state);
+        else if (activePage === "control") renderStockControlPage(state);
         else if (activePage === "economy") renderEconomy(state);
         else if (activePage === "portfolio") renderPortfolioPage(state);
       }
@@ -2494,6 +2697,102 @@
         activateTab("markets");
         if (latestState) renderAll(latestState);
       });
+      $("openTradeFlowFromTrading").addEventListener("click", () => {
+        activateTab("trade-flow");
+        if (latestState) renderAll(latestState);
+      });
+      $("openControlFromTrading").addEventListener("click", () => {
+        activateTab("control");
+        if (latestState) renderAll(latestState);
+      });
+      $("flowStartBuy").addEventListener("click", () => {
+        $("tradeType").value = "market";
+        $("tradePrice").disabled = true;
+        activateTab("trading");
+        if (latestState) {
+          renderAll(latestState);
+          $("tradeStatus").textContent = "Buy flow ready: review quantity and click ▲ Buy.";
+          $("tradeStatus").style.color = "#8dc7ff";
+        }
+      });
+      $("flowStartSell").addEventListener("click", () => {
+        $("tradeType").value = "market";
+        $("tradePrice").disabled = true;
+        activateTab("trading");
+        if (latestState) {
+          renderAll(latestState);
+          $("tradeStatus").textContent = "Sell flow ready: review quantity and click ▼ Sell.";
+          $("tradeStatus").style.color = "#8dc7ff";
+        }
+      });
+      $("flowSetLimit").addEventListener("click", () => {
+        $("btnLimitAtMarket").click();
+        activateTab("trading");
+        if (latestState) {
+          renderAll(latestState);
+          $("tradeStatus").textContent = "Limit flow ready: limit price was prefilled at market.";
+          $("tradeStatus").style.color = "#8dc7ff";
+        }
+      });
+      $("ctrlCompany").addEventListener("change", () => {
+        selectedCompanyId = $("ctrlCompany").value;
+        if (latestState) renderStockControlPage(latestState);
+      });
+      $("ctrlStability").addEventListener("input", () => {
+        $("ctrlStabilityValue").value = $("ctrlStability").value;
+        $("ctrlStabilityMeter").style.width = `${$("ctrlStability").value}%`;
+        $("ctrlStabilityMeter").style.background = stabColor(Number($("ctrlStability").value) / 100);
+      });
+      $("ctrlStabilityValue").addEventListener("input", () => {
+        const clamped = Math.max(20, Math.min(98, Number($("ctrlStabilityValue").value || 70)));
+        $("ctrlStabilityValue").value = String(clamped);
+        $("ctrlStability").value = String(clamped);
+        $("ctrlStabilityMeter").style.width = `${clamped}%`;
+        $("ctrlStabilityMeter").style.background = stabColor(clamped / 100);
+      });
+
+      async function applyStockControl() {
+        const status = $("controlStatus");
+        try {
+          const companyId = $("ctrlCompany").value;
+          const support = Number($("ctrlSupport").value || 0);
+          const resistance = Number($("ctrlResistance").value || 0);
+          if (!companyId) throw new Error("Select a stock");
+          if (support <= 0 || resistance <= 0) throw new Error("Support and resistance must be positive");
+          if (resistance <= support) throw new Error("Resistance must be above support");
+          const payload = {
+            companyId,
+            stability: Number($("ctrlStability").value || 70) / 100,
+            support,
+            resistance,
+            supportStrength: Number($("ctrlSupportStrength").value || 72) / 100,
+            resistanceStrength: Number($("ctrlResistanceStrength").value || 72) / 100
+          };
+          const res = await fetch("/api/stock/control", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Stock control update failed");
+          if (latestState?.stocks) {
+            const stock = latestState.stocks.find((s) => s.companyId === companyId);
+            if (stock) {
+              stock.stability = data.stability;
+              stock.support = data.support;
+              stock.resistance = data.resistance;
+              stock.supportStrength = data.supportStrength;
+              stock.resistanceStrength = data.resistanceStrength;
+            }
+          }
+          status.style.color = "#8dc7ff";
+          status.textContent = `Updated ${companyId}: stability ${n((data.stability ?? 0) * 100, 0)}% · support $${n(data.support ?? 0, 4)} · resistance $${n(data.resistance ?? 0, 4)}`;
+          if (latestState) renderAll(latestState);
+        } catch (err) {
+          status.style.color = "#ff92aa";
+          status.textContent = err.message;
+        }
+      }
 
       async function postOrder(side) {
         const status = $("tradeStatus");
@@ -2621,6 +2920,7 @@
       $("btnSquareOff").addEventListener("click", squareOffSelectedPosition);
       $("btnCreateCompany").addEventListener("click", createCompanyFromForm);
       $("btnRunAction").addEventListener("click", runBusinessAction);
+      $("btnApplyStockControl").addEventListener("click", applyStockControl);
       $("actionCompany").addEventListener("change", () => {
         if (!latestState) return;
         renderTrading(latestState);

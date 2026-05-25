@@ -9,7 +9,7 @@ import { listScenarioBlueprints, runScenarioPlaybook } from "../simulator/scenar
 
 const PORT = Number(process.env.PORT || 3000);
 const publicDir = path.resolve(process.cwd(), "src/web");
-const appRoutes = new Set(["/", "/trading", "/markets", "/company", "/economy", "/portfolio"]);
+const appRoutes = new Set(["/", "/trading", "/trade-flow", "/markets", "/company", "/control", "/economy", "/portfolio"]);
 
 const state = loadCheckpoint() ?? createInitialState({ seed: 7 });
 if (!Object.keys(state.companies).length) createSeedCompanies(state, 16);
@@ -70,9 +70,13 @@ function getSnapshot() {
       dayLow: stock.dayLow,
       support: stock.support,
       resistance: stock.resistance,
+      supportStrength: stock.supportStrength,
+      resistanceStrength: stock.resistanceStrength,
+      supportBreakPressure: stock.supportBreakPressure,
+      resistanceBreakPressure: stock.resistanceBreakPressure,
       publicFloatShares: stock.publicFloatShares,
       sharesOutstanding: stock.sharesOutstanding,
-      candles: stock.candles.slice(-240),
+      candles: stock.candles.slice(-600),
       buyDepth: state.orderBooks[companyId]?.buy?.length ?? 0,
       sellDepth: state.orderBooks[companyId]?.sell?.length ?? 0
     })),
@@ -295,6 +299,43 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const trades = squareOffPosition(state, { companyId: body.companyId, traderId: body.traderId ?? "player" });
       return sendJson(res, 200, { trades, player: state.player, alerts: state.analytics?.alerts ?? [] });
+    }
+
+    if (url.pathname === "/api/stock/control" && req.method === "POST") {
+      const body = await readBody(req);
+      const companyId = String(body.companyId ?? "");
+      const stock = state.stocks[companyId];
+      if (!stock || !state.companies[companyId]) return sendJson(res, 404, { error: "Unknown company" });
+
+      if (body.stability !== undefined) {
+        stock.stability = Number(clamp(Number(body.stability), 0.2, 0.98).toFixed(3));
+      }
+      if (body.supportStrength !== undefined) {
+        stock.supportStrength = Number(clamp(Number(body.supportStrength), 0.2, 0.98).toFixed(3));
+      }
+      if (body.resistanceStrength !== undefined) {
+        stock.resistanceStrength = Number(clamp(Number(body.resistanceStrength), 0.2, 0.98).toFixed(3));
+      }
+
+      let support = Number(stock.support ?? stock.lastPrice * 0.96);
+      let resistance = Number(stock.resistance ?? stock.lastPrice * 1.04);
+      if (body.support !== undefined) support = Math.max(0.0001, Number(body.support));
+      if (body.resistance !== undefined) resistance = Math.max(0.0002, Number(body.resistance));
+      if (!Number.isFinite(support)) support = Number(stock.support ?? stock.lastPrice * 0.96);
+      if (!Number.isFinite(resistance)) resistance = Number(stock.resistance ?? stock.lastPrice * 1.04);
+      if (resistance <= support) resistance = support + 0.0001;
+      stock.support = Number(support.toFixed(4));
+      stock.resistance = Number(resistance.toFixed(4));
+
+      refreshMarketAnalytics(state);
+      return sendJson(res, 200, {
+        companyId,
+        stability: stock.stability,
+        support: stock.support,
+        resistance: stock.resistance,
+        supportStrength: stock.supportStrength,
+        resistanceStrength: stock.resistanceStrength
+      });
     }
 
     if (url.pathname === "/api/tick" && req.method === "POST") {
