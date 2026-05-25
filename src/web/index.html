@@ -1384,10 +1384,35 @@
           </select>
         </div>
         <div class="trade-row" style="margin-bottom:8px">
+          <select id="pgBatch" style="flex:1">
+            <option value="">All batches</option>
+            <option value="1">batch-1</option>
+            <option value="2">batch-2</option>
+            <option value="3">batch-3</option>
+            <option value="4">batch-4</option>
+            <option value="5">batch-5</option>
+          </select>
+          <input id="pgCategory" type="text" placeholder="Category filter (optional)" style="flex:1" />
+        </div>
+        <div class="trade-row" style="margin-bottom:8px">
           <input id="pgSearch" type="text" placeholder="Search feature/module/id" style="flex:2" />
           <button id="pgRefresh" style="flex:1">Refresh Contracts</button>
         </div>
         <div id="pgFeatures"></div>
+      </div>
+      <div class="eco-row" style="margin-bottom:12px">
+        <div class="card">
+          <div class="card-title">Phase Board</div>
+          <div id="pgPhaseBoard"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Release Checkpoints</div>
+          <div id="pgCheckpoints"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Runbooks</div>
+        <div id="pgRunbooks"></div>
       </div>
       <div class="card">
         <div class="card-title">No-Courses Policy</div>
@@ -1460,6 +1485,9 @@
       let programEnvironmentCache = null;
       let programPolicyCache = null;
       let programFeaturesCache = [];
+      let programPhaseBoardCache = null;
+      let programRunbooksCache = [];
+      let programCheckpointsCache = [];
 
       function loadWatchlist() {
         try {
@@ -2761,18 +2789,57 @@
         };
       }
 
+      async function refreshProgramOperationalData(force = false) {
+        if (programPhaseBoardCache && programRunbooksCache.length && programCheckpointsCache.length && !force) {
+          return {
+            phases: programPhaseBoardCache,
+            runbooks: programRunbooksCache,
+            checkpoints: programCheckpointsCache
+          };
+        }
+        const moduleId = $("pgModule")?.value ?? "";
+        const query = new URLSearchParams();
+        if (moduleId) query.set("module", moduleId);
+        query.set("limit", "150");
+        const [phaseRes, runbookRes, checkpointsRes] = await Promise.all([
+          fetch("/api/program/phase-board"),
+          fetch(`/api/program/runbooks?${query.toString()}`),
+          fetch("/api/program/release-checkpoints")
+        ]);
+        const [phaseData, runbookData, checkpointData] = await Promise.all([
+          phaseRes.json(),
+          runbookRes.json(),
+          checkpointsRes.json()
+        ]);
+        if (!phaseRes.ok) throw new Error(phaseData.error ?? "Failed to load phase board");
+        if (!runbookRes.ok) throw new Error(runbookData.error ?? "Failed to load runbooks");
+        if (!checkpointsRes.ok) throw new Error(checkpointData.error ?? "Failed to load checkpoints");
+        programPhaseBoardCache = phaseData.phases ?? null;
+        programRunbooksCache = runbookData.runbooks ?? [];
+        programCheckpointsCache = checkpointData.checkpoints ?? [];
+        return {
+          phases: programPhaseBoardCache,
+          runbooks: programRunbooksCache,
+          checkpoints: programCheckpointsCache
+        };
+      }
+
       async function refreshProgramFeatures(force = false) {
         if (programFeaturesCache.length && !force) return programFeaturesCache;
         const moduleId = $("pgModule")?.value ?? "";
         const phase = $("pgPhase")?.value ?? "";
         const status = $("pgStatus")?.value ?? "";
+        const batch = $("pgBatch")?.value ?? "";
+        const category = $("pgCategory")?.value?.trim() ?? "";
         const search = $("pgSearch")?.value?.trim() ?? "";
         const query = new URLSearchParams();
         if (moduleId) query.set("module", moduleId);
         if (phase) query.set("phase", phase);
         if (status) query.set("status", status);
+        if (batch) query.set("batch", batch);
+        if (category) query.set("category", category);
         if (search) query.set("search", search);
-        query.set("limit", "200");
+        query.set("limit", "500");
         const res = await fetch(`/api/program/features?${query.toString()}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Failed to load program features");
@@ -2875,9 +2942,12 @@
         const env = programEnvironmentCache;
         const policy = programPolicyCache;
         const features = programFeaturesCache ?? [];
+        const phaseBoard = programPhaseBoardCache ?? {};
+        const runbooks = programRunbooksCache ?? [];
+        const checkpoints = programCheckpointsCache ?? [];
 
         $("pgSummary").textContent = overview
-          ? `${overview.totalModules ?? 0} modules · ${overview.totalFeatures ?? 0} feature contracts · Planned ${overview.statusBreakdown?.planned ?? 0} · In-progress ${overview.statusBreakdown?.["in-progress"] ?? 0}`
+          ? `${overview.totalModules ?? 0} modules · ${overview.totalFeatures ?? 0} feature contracts · Runbooks ${overview.totalRunbooks ?? 0} · Planned ${overview.statusBreakdown?.planned ?? 0} · In-progress ${overview.statusBreakdown?.["in-progress"] ?? 0}`
           : "Program overview is loading…";
 
         const moduleSelect = $("pgModule");
@@ -2909,22 +2979,57 @@
           : "<div class='tiny'>Environment blueprint is loading…</div>";
 
         $("pgFeatures").innerHTML = features.length
-          ? features.slice(0, 120).map((feature) => `
+          ? features.slice(0, 300).map((feature) => `
               <div class="route-card" style="margin-bottom:8px">
                 <div style="display:flex;justify-content:space-between;gap:8px">
                   <div style="font-weight:700">${feature.featureId} · ${feature.title}</div>
                   <span class="severity-badge ${feature.status === "complete" ? "low" : feature.status === "blocked" ? "critical" : "medium"}">${feature.status}</span>
                 </div>
-                <div class="tiny" style="margin-top:4px">${feature.moduleName} · ${feature.phase} · ${feature.apiSpec?.method} ${feature.apiSpec?.path}</div>
+                <div class="tiny" style="margin-top:4px">${feature.moduleName} · ${feature.phase} · batch ${feature.batch ?? "--"} · ${feature.category ?? "general"}</div>
+                <div class="tiny" style="margin-top:4px">${feature.apiSpec?.method} ${feature.apiSpec?.path}</div>
                 <div class="tiny" style="margin-top:4px;color:var(--muted)">UI: ${(feature.uiImpact?.pages ?? []).join(", ")} · Data: ${(feature.dataModelChanges?.entities ?? []).join(", ")}</div>
               </div>
             `).join("")
           : "<div class='tiny'>No contracts match current filters.</div>";
 
+        const phaseItems = Object.entries(phaseBoard);
+        $("pgPhaseBoard").innerHTML = phaseItems.length
+          ? phaseItems.map(([phase, payload]) => `
+              <div class="route-card" style="margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;gap:8px">
+                  <div style="font-weight:700">${phase}</div>
+                  <div style="font-weight:700;color:var(--accent)">${payload.total ?? 0}</div>
+                </div>
+                <div class="tiny" style="margin-top:4px;color:var(--muted)">Modules: ${Object.entries(payload.byModule ?? {}).map(([k, v]) => `${k}:${v}`).join(" · ")}</div>
+              </div>
+            `).join("")
+          : "<div class='tiny'>No phase board data.</div>";
+
+        $("pgCheckpoints").innerHTML = checkpoints.length
+          ? checkpoints.map((checkpoint) => `
+              <div class="route-card" style="margin-bottom:8px">
+                <div style="font-weight:700">${checkpoint.name}</div>
+                <div class="tiny" style="margin-top:4px">${checkpoint.phase}</div>
+                <div class="tiny" style="margin-top:4px;color:var(--muted)">${(checkpoint.requirements ?? []).join(" · ")}</div>
+              </div>
+            `).join("")
+          : "<div class='tiny'>No checkpoints loaded.</div>";
+
+        $("pgRunbooks").innerHTML = runbooks.length
+          ? runbooks.slice(0, 80).map((runbook) => `
+              <div class="route-card" style="margin-bottom:8px">
+                <div style="font-weight:700">${runbook.id} · ${runbook.title}</div>
+                <div class="tiny" style="margin-top:4px">${runbook.moduleId} · ${runbook.trigger}</div>
+                <div class="tiny" style="margin-top:4px;color:var(--muted)">${(runbook.steps ?? []).join(" → ")}</div>
+              </div>
+            `).join("")
+          : "<div class='tiny'>No runbooks loaded.</div>";
+
         $("pgPolicy").innerHTML = policy
           ? `
             <div class="tiny" style="margin-bottom:6px">${policy.description}</div>
-            <div class="tiny">Blocked terms: ${(policy.blockedTerms ?? []).join(", ")}</div>
+            <div class="tiny" style="margin-bottom:6px">Blocked terms: ${(policy.blockedTerms ?? []).join(", ")}</div>
+            <div class="tiny">Enforcement: ${policy.enforcement ?? "runtime policy validation"}</div>
           `
           : "<div class='tiny'>Policy is loading…</div>";
       }
@@ -3096,22 +3201,40 @@
       });
       $("pgRefresh").addEventListener("click", async () => {
         try {
+          programPhaseBoardCache = null;
+          programRunbooksCache = [];
+          programCheckpointsCache = [];
           await refreshProgramFeatures(true);
+          await refreshProgramOperationalData(true);
           if (latestState) renderProgram(latestState);
         } catch (error) {
           $("pgSummary").textContent = error.message;
         }
       });
-      ["pgModule", "pgPhase", "pgStatus"].forEach((id) => {
+      ["pgModule", "pgPhase", "pgStatus", "pgBatch"].forEach((id) => {
         $(id).addEventListener("change", async () => {
           try {
             programFeaturesCache = [];
+            programPhaseBoardCache = null;
+            programRunbooksCache = [];
+            programCheckpointsCache = [];
             await refreshProgramFeatures(true);
+            await refreshProgramOperationalData(true);
             if (latestState) renderProgram(latestState);
           } catch (error) {
             $("pgSummary").textContent = error.message;
           }
         });
+      });
+      $("pgCategory").addEventListener("keydown", async (event) => {
+        if (event.key !== "Enter") return;
+        try {
+          programFeaturesCache = [];
+          await refreshProgramFeatures(true);
+          if (latestState) renderProgram(latestState);
+        } catch (error) {
+          $("pgSummary").textContent = error.message;
+        }
       });
       $("pgSearch").addEventListener("keydown", async (event) => {
         if (event.key !== "Enter") return;
@@ -3365,7 +3488,7 @@
       refreshMissionBoard().catch(() => {});
       refreshAcademy().catch(() => {});
       refreshProgramBundle()
-        .then(() => refreshProgramFeatures(true))
+        .then(() => Promise.all([refreshProgramFeatures(true), refreshProgramOperationalData(true)]))
         .catch((error) => {
           $("pgSummary").textContent = error.message;
         });
@@ -3377,7 +3500,7 @@
         refreshMissionBoard().catch(() => {});
         refreshAcademy().catch(() => {});
         if ((document.querySelector(".tab.active")?.dataset?.tab ?? "") === "program") {
-          refreshProgramFeatures(true).catch(() => {});
+          Promise.all([refreshProgramFeatures(true), refreshProgramOperationalData(true)]).catch(() => {});
         }
       };
       stream.onerror = () => {

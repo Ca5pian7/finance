@@ -154,9 +154,12 @@ npm run simulate
 - `GET /api/insights/academy` — academy tracks, featured lessons, and mastery snapshot
 - `GET /api/program/overview` — mega program module + feature summary
 - `GET /api/program/modules` — module catalog with feature counts
-- `GET /api/program/features?module=<id>&phase=<phase>&status=<status>&search=<text>&limit=<n>` — feature contracts filtered query
+- `GET /api/program/features?module=<id>&phase=<phase>&status=<status>&batch=<n>&category=<name>&search=<text>&limit=<n>` — feature contracts filtered query
 - `GET /api/program/feature-contract?featureId=<id>` — detailed feature contract lookup
 - `GET /api/program/milestones` — phase gates and module coverage
+- `GET /api/program/phase-board` — phase-level module/status distribution for backlog governance
+- `GET /api/program/runbooks?module=<id>&limit=<n>` — operational runbooks for module execution and incident response
+- `GET /api/program/release-checkpoints` — release checkpoint requirements by phase
 - `GET /api/program/environment` — environment/runtime/config/secrets/logging/deployment blueprint
 - `GET /api/program/no-courses-policy` — no-courses expansion rule metadata
 - `GET /api/program/health` — program ops telemetry snapshot

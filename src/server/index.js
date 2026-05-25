@@ -14,6 +14,9 @@ import {
   getProgramMilestones,
   getProgramNoCoursesPolicy,
   getProgramOverview,
+  getProgramPhaseBoard,
+  listProgramReleaseCheckpoints,
+  listProgramRunbooks,
   listProgramFeatureContracts,
   listProgramModules
 } from "../simulator/mega-program.js";
@@ -309,8 +312,10 @@ const server = http.createServer(async (req, res) => {
         moduleId: url.searchParams.get("module") ?? undefined,
         phase: url.searchParams.get("phase") ?? undefined,
         status: url.searchParams.get("status") ?? undefined,
+        batch: url.searchParams.get("batch") ?? undefined,
+        category: url.searchParams.get("category") ?? undefined,
         search: url.searchParams.get("search") ?? undefined,
-        limit: Number(url.searchParams.get("limit") ?? 120)
+        limit: Number(url.searchParams.get("limit") ?? 240)
       });
       return sendJson(res, 200, { features, count: features.length });
     }
@@ -324,6 +329,22 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === "/api/program/milestones" && req.method === "GET") {
       return sendJson(res, 200, { milestones: getProgramMilestones() });
+    }
+
+    if (url.pathname === "/api/program/phase-board" && req.method === "GET") {
+      return sendJson(res, 200, { phases: getProgramPhaseBoard() });
+    }
+
+    if (url.pathname === "/api/program/runbooks" && req.method === "GET") {
+      const runbooks = listProgramRunbooks({
+        moduleId: url.searchParams.get("module") ?? undefined,
+        limit: Number(url.searchParams.get("limit") ?? 120)
+      });
+      return sendJson(res, 200, { runbooks, count: runbooks.length });
+    }
+
+    if (url.pathname === "/api/program/release-checkpoints" && req.method === "GET") {
+      return sendJson(res, 200, { checkpoints: listProgramReleaseCheckpoints() });
     }
 
     if (url.pathname === "/api/program/environment" && req.method === "GET") {
