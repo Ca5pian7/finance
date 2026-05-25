@@ -7,9 +7,23 @@ import { executeMerger, executeStrategicAction, placeOrder, runTick, squareOffPo
 import { fastForward, loadCheckpoint, saveCheckpoint } from "../simulator/persistence.js";
 import { listScenarioBlueprints, runScenarioPlaybook } from "../simulator/scenario-lab.js";
 import { buildMissionBoard, getAcademySnapshot, getInsightsBundle, listStrategyPlaybooks, runStrategyBacktest } from "../simulator/insights.js";
+import {
+  getProgramEnvironmentBlueprint,
+  getProgramFeatureContractById,
+  getProgramHealth,
+  getProgramMilestones,
+  getProgramNoCoursesPolicy,
+  getProgramOverview,
+  listProgramFeatureContracts,
+  listProgramModules
+} from "../simulator/mega-program.js";
 
 const PORT = Number(process.env.PORT || 3000);
 const publicDir = path.resolve(process.cwd(), "src/web");
+const ADMIN_BEARER_TOKEN = String(process.env.ADMIN_BEARER_TOKEN ?? "").trim();
+const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000));
+const RATE_LIMIT_MAX = Math.max(10, Number(process.env.RATE_LIMIT_MAX ?? 240));
+const LOG_LEVEL = String(process.env.LOG_LEVEL ?? "info").toLowerCase();
 const appRoutes = new Set([
   "/",
   "/trading",
@@ -20,7 +34,8 @@ const appRoutes = new Set([
   "/economy",
   "/portfolio",
   "/strategy-lab",
-  "/academy"
+  "/academy",
+  "/program"
 ]);
 
 const state = loadCheckpoint() ?? createInitialState({ seed: 7 });
@@ -29,6 +44,32 @@ refreshPlayerAnalytics(state);
 refreshMarketAnalytics(state);
 
 const streamClients = new Set();
+const requestCounters = {
+  requests: 0,
+  rateLimited: 0,
+  errors: 0,
+  startedAt: Date.now()
+};
+const requestRateWindowByIp = new Map();
+const featureStatusOverrides = new Map();
+
+function shouldLog(level) {
+  const weights = { debug: 10, info: 20, warn: 30, error: 40 };
+  return (weights[level] ?? 999) >= (weights[LOG_LEVEL] ?? 20);
+}
+
+function log(level, message, details = {}) {
+  if (!shouldLog(level)) return;
+  // eslint-disable-next-line no-console
+  console.log(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      level,
+      message,
+      ...details
+    })
+  );
+}
 
 setInterval(() => {
   runTick(state);
@@ -42,6 +83,7 @@ function broadcast() {
 }
 
 function getSnapshot() {
+  const overview = getProgramOverview();
   return {
     tick: state.tick,
     time: state.time,
@@ -145,6 +187,13 @@ function getSnapshot() {
       etfs: state.financialSystem?.etfs ?? [],
       hedgeFunds: state.financialSystem?.hedgeFunds ?? [],
       stats: state.financialSystem?.stats ?? {}
+    },
+    program: {
+      totalModules: overview.totalModules,
+      totalFeatures: overview.totalFeatures,
+      phaseBreakdown: overview.phaseBreakdown,
+      statusBreakdown: overview.statusBreakdown,
+      noCoursesPolicy: overview.noCoursesPolicy
     }
   };
 }
@@ -165,6 +214,60 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function getClientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim();
+  if (forwarded) return forwarded;
+  return req.socket?.remoteAddress ?? "unknown";
+}
+
+function isRateLimited(req) {
+  if (!req.url?.startsWith("/api/")) return false;
+  if (req.url.startsWith("/api/stream")) return false;
+  const now = Date.now();
+  const clientIp = getClientIp(req);
+  const bucket = requestRateWindowByIp.get(clientIp) ?? { start: now, count: 0 };
+  if (now - bucket.start >= RATE_LIMIT_WINDOW_MS) {
+    bucket.start = now;
+    bucket.count = 0;
+  }
+  bucket.count += 1;
+  requestRateWindowByIp.set(clientIp, bucket);
+  return bucket.count > RATE_LIMIT_MAX;
+}
+
+function requireAdminAuth(req) {
+  if (!req.url?.startsWith("/api/admin/")) return true;
+  if (!ADMIN_BEARER_TOKEN) return true;
+  const header = String(req.headers.authorization ?? "");
+  const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
+  return token && token === ADMIN_BEARER_TOKEN;
+}
+
+function normalizeFeatureStatus(status) {
+  const normalized = String(status ?? "").toLowerCase();
+  return ["planned", "in-progress", "review", "complete", "blocked"].includes(normalized) ? normalized : null;
+}
+
+function applyFeatureOverride(contract) {
+  if (!contract) return null;
+  const override = featureStatusOverrides.get(contract.featureId);
+  if (!override) return contract;
+  return { ...contract, ...override, overrideUpdatedAt: override.updatedAt };
+}
+
+function listRuntimeProgramFeatures(filters = {}) {
+  return listProgramFeatureContracts(filters).map((feature) => applyFeatureOverride(feature));
+}
+
+function getRuntimeProgramOverview() {
+  const base = getProgramOverview();
+  const statuses = { planned: 0, "in-progress": 0, review: 0, complete: 0, blocked: 0 };
+  listRuntimeProgramFeatures({ limit: 500 }).forEach((feature) => {
+    statuses[feature.status] = (statuses[feature.status] ?? 0) + 1;
+  });
+  return { ...base, statusBreakdown: statuses };
+}
+
 function serveStatic(req, res, pathname = "/") {
   const file = appRoutes.has(pathname) ? "index.html" : pathname.slice(1);
   const target = path.join(publicDir, file);
@@ -180,8 +283,88 @@ function serveStatic(req, res, pathname = "/") {
 }
 
 const server = http.createServer(async (req, res) => {
+  const requestId = String(req.headers["x-request-id"] ?? `req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  requestCounters.requests += 1;
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    if (isRateLimited(req)) {
+      requestCounters.rateLimited += 1;
+      return sendJson(res, 429, { error: "Rate limit exceeded", requestId, retryAfterMs: RATE_LIMIT_WINDOW_MS });
+    }
+    if (!requireAdminAuth(req)) {
+      log("warn", "unauthorized admin request", { requestId, method: req.method, path: url.pathname });
+      return sendJson(res, 401, { error: "Unauthorized admin request", requestId });
+    }
+
+    if (url.pathname === "/api/program/overview" && req.method === "GET") {
+      return sendJson(res, 200, getRuntimeProgramOverview());
+    }
+
+    if (url.pathname === "/api/program/modules" && req.method === "GET") {
+      return sendJson(res, 200, { modules: listProgramModules() });
+    }
+
+    if (url.pathname === "/api/program/features" && req.method === "GET") {
+      const features = listRuntimeProgramFeatures({
+        moduleId: url.searchParams.get("module") ?? undefined,
+        phase: url.searchParams.get("phase") ?? undefined,
+        status: url.searchParams.get("status") ?? undefined,
+        search: url.searchParams.get("search") ?? undefined,
+        limit: Number(url.searchParams.get("limit") ?? 120)
+      });
+      return sendJson(res, 200, { features, count: features.length });
+    }
+
+    if (url.pathname === "/api/program/feature-contract" && req.method === "GET") {
+      const featureId = url.searchParams.get("featureId");
+      const contract = applyFeatureOverride(getProgramFeatureContractById(featureId));
+      if (!contract) return sendJson(res, 404, { error: "Unknown feature contract", requestId });
+      return sendJson(res, 200, contract);
+    }
+
+    if (url.pathname === "/api/program/milestones" && req.method === "GET") {
+      return sendJson(res, 200, { milestones: getProgramMilestones() });
+    }
+
+    if (url.pathname === "/api/program/environment" && req.method === "GET") {
+      return sendJson(res, 200, getProgramEnvironmentBlueprint());
+    }
+
+    if (url.pathname === "/api/program/no-courses-policy" && req.method === "GET") {
+      return sendJson(res, 200, getProgramNoCoursesPolicy());
+    }
+
+    if (url.pathname === "/api/program/health" && req.method === "GET") {
+      return sendJson(
+        res,
+        200,
+        getProgramHealth({
+          requestCount: requestCounters.requests,
+          streamClientCount: streamClients.size,
+          uptimeMs: Date.now() - requestCounters.startedAt,
+          rateLimitedCount: requestCounters.rateLimited,
+          errorCount: requestCounters.errors
+        })
+      );
+    }
+
+    if (url.pathname === "/api/admin/program/feature-status" && req.method === "POST") {
+      const body = await readBody(req);
+      const featureId = String(body.featureId ?? "");
+      const existing = getProgramFeatureContractById(featureId);
+      if (!existing) return sendJson(res, 404, { error: "Unknown feature contract", requestId });
+      const status = normalizeFeatureStatus(body.status);
+      if (!status) return sendJson(res, 400, { error: "Invalid status value", requestId });
+      const notes = String(body.notes ?? "").slice(0, 500);
+      featureStatusOverrides.set(featureId, {
+        status,
+        notes,
+        updatedAt: new Date().toISOString()
+      });
+      const updated = applyFeatureOverride(existing);
+      log("info", "feature status updated", { requestId, featureId, status });
+      return sendJson(res, 200, updated);
+    }
 
     if (url.pathname === "/api/state" && req.method === "GET") return sendJson(res, 200, getSnapshot());
 
@@ -410,6 +593,8 @@ const server = http.createServer(async (req, res) => {
 
     return serveStatic(req, res, url.pathname);
   } catch (error) {
+    requestCounters.errors += 1;
+    log("error", "request failed", { message: error.message, stack: error.stack, method: req.method, path: req.url });
     return sendJson(res, 400, { error: error.message });
   }
 });

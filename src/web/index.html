@@ -714,6 +714,7 @@
       <div class="tab" data-tab="portfolio">💼 Portfolio</div>
       <div class="tab" data-tab="strategy-lab">🧪 Strategy Lab</div>
       <div class="tab" data-tab="academy">🎓 Academy</div>
+      <div class="tab" data-tab="program">🧩 Program</div>
     </nav>
 
     <!-- NEWS TICKER -->
@@ -1345,6 +1346,55 @@
       </div>
     </div>
 
+    <!-- ════════ PAGE: PROGRAM ════════ -->
+    <div id="page-program" class="page">
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Mega Program Overview</div>
+        <div class="tiny" id="pgSummary">Loading program overview…</div>
+      </div>
+      <div class="eco-row" style="margin-bottom:12px">
+        <div class="card">
+          <div class="card-title">Milestones</div>
+          <div id="pgMilestones"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Environment Blueprint</div>
+          <div id="pgEnvironment"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Feature Contract Explorer</div>
+        <div class="trade-row" style="margin-bottom:8px">
+          <select id="pgModule" style="flex:1"></select>
+          <select id="pgPhase" style="flex:1">
+            <option value="">All phases</option>
+            <option value="phase-1">phase-1</option>
+            <option value="phase-2">phase-2</option>
+            <option value="phase-3">phase-3</option>
+            <option value="phase-4">phase-4</option>
+            <option value="phase-5">phase-5</option>
+          </select>
+          <select id="pgStatus" style="flex:1">
+            <option value="">All status</option>
+            <option value="planned">planned</option>
+            <option value="in-progress">in-progress</option>
+            <option value="review">review</option>
+            <option value="complete">complete</option>
+            <option value="blocked">blocked</option>
+          </select>
+        </div>
+        <div class="trade-row" style="margin-bottom:8px">
+          <input id="pgSearch" type="text" placeholder="Search feature/module/id" style="flex:2" />
+          <button id="pgRefresh" style="flex:1">Refresh Contracts</button>
+        </div>
+        <div id="pgFeatures"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">No-Courses Policy</div>
+        <div id="pgPolicy"></div>
+      </div>
+    </div>
+
     <script>
       /* ── utils ── */
       const $ = (id) => document.getElementById(id);
@@ -1405,6 +1455,11 @@
       let strategyLabCache = null;
       let missionBoardCache = null;
       let academyCache = null;
+      let programOverviewCache = null;
+      let programMilestonesCache = null;
+      let programEnvironmentCache = null;
+      let programPolicyCache = null;
+      let programFeaturesCache = [];
 
       function loadWatchlist() {
         try {
@@ -1441,7 +1496,7 @@
 
       function tabFromHash() {
         const hashTab = window.location.hash.replace(/^#/, "").trim().toLowerCase();
-        return ["trading", "trade-flow", "markets", "company", "control", "economy", "portfolio", "strategy-lab", "academy"].includes(hashTab)
+        return ["trading", "trade-flow", "markets", "company", "control", "economy", "portfolio", "strategy-lab", "academy", "program"].includes(hashTab)
           ? hashTab
           : "trading";
       }
@@ -2669,6 +2724,62 @@
         return academyCache;
       }
 
+      async function refreshProgramBundle(force = false) {
+        if (programOverviewCache && programMilestonesCache && programEnvironmentCache && programPolicyCache && !force) {
+          return {
+            overview: programOverviewCache,
+            milestones: programMilestonesCache,
+            environment: programEnvironmentCache,
+            policy: programPolicyCache
+          };
+        }
+        const [overviewRes, milestonesRes, environmentRes, policyRes] = await Promise.all([
+          fetch("/api/program/overview"),
+          fetch("/api/program/milestones"),
+          fetch("/api/program/environment"),
+          fetch("/api/program/no-courses-policy")
+        ]);
+        const [overview, milestones, environment, policy] = await Promise.all([
+          overviewRes.json(),
+          milestonesRes.json(),
+          environmentRes.json(),
+          policyRes.json()
+        ]);
+        if (!overviewRes.ok) throw new Error(overview.error ?? "Failed to load program overview");
+        if (!milestonesRes.ok) throw new Error(milestones.error ?? "Failed to load program milestones");
+        if (!environmentRes.ok) throw new Error(environment.error ?? "Failed to load environment blueprint");
+        if (!policyRes.ok) throw new Error(policy.error ?? "Failed to load no-courses policy");
+        programOverviewCache = overview;
+        programMilestonesCache = milestones.milestones ?? [];
+        programEnvironmentCache = environment;
+        programPolicyCache = policy;
+        return {
+          overview: programOverviewCache,
+          milestones: programMilestonesCache,
+          environment: programEnvironmentCache,
+          policy: programPolicyCache
+        };
+      }
+
+      async function refreshProgramFeatures(force = false) {
+        if (programFeaturesCache.length && !force) return programFeaturesCache;
+        const moduleId = $("pgModule")?.value ?? "";
+        const phase = $("pgPhase")?.value ?? "";
+        const status = $("pgStatus")?.value ?? "";
+        const search = $("pgSearch")?.value?.trim() ?? "";
+        const query = new URLSearchParams();
+        if (moduleId) query.set("module", moduleId);
+        if (phase) query.set("phase", phase);
+        if (status) query.set("status", status);
+        if (search) query.set("search", search);
+        query.set("limit", "200");
+        const res = await fetch(`/api/program/features?${query.toString()}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load program features");
+        programFeaturesCache = Array.isArray(data.features) ? data.features : [];
+        return programFeaturesCache;
+      }
+
       function renderStrategyLab(state) {
         const summary = strategyLabCache;
         const board = missionBoardCache;
@@ -2758,6 +2869,66 @@
           : "<div class='tiny'>No featured lessons yet.</div>";
       }
 
+      function renderProgram(state) {
+        const overview = programOverviewCache;
+        const milestones = programMilestonesCache ?? [];
+        const env = programEnvironmentCache;
+        const policy = programPolicyCache;
+        const features = programFeaturesCache ?? [];
+
+        $("pgSummary").textContent = overview
+          ? `${overview.totalModules ?? 0} modules · ${overview.totalFeatures ?? 0} feature contracts · Planned ${overview.statusBreakdown?.planned ?? 0} · In-progress ${overview.statusBreakdown?.["in-progress"] ?? 0}`
+          : "Program overview is loading…";
+
+        const moduleSelect = $("pgModule");
+        if (moduleSelect && overview?.modules?.length && moduleSelect.options.length === 0) {
+          moduleSelect.innerHTML = [
+            `<option value="">All modules</option>`,
+            ...overview.modules.map((module) => `<option value="${module.id}">${module.name} (${module.featureCount})</option>`)
+          ].join("");
+        }
+
+        $("pgMilestones").innerHTML = milestones.length
+          ? milestones.map((m) => `
+              <div class="route-card" style="margin-bottom:8px">
+                <div style="font-weight:700">${m.name}</div>
+                <div class="tiny" style="margin-top:4px">${m.focus}</div>
+                <div class="tiny" style="margin-top:4px;color:var(--muted)">Modules: ${(m.moduleIds ?? []).join(", ")}</div>
+              </div>
+            `).join("")
+          : "<div class='tiny'>No milestones loaded.</div>";
+
+        $("pgEnvironment").innerHTML = env
+          ? `
+            <div class="tiny" style="margin-bottom:6px">Target: ${env.target}</div>
+            <div class="tiny" style="margin-bottom:6px">Runtime: Node ${env.runtime?.node ?? "--"} · ${env.runtime?.moduleSystem ?? "--"}</div>
+            <div class="tiny" style="margin-bottom:6px">Config: ${(env.configStrategy?.sourceOfTruth ?? "--")}</div>
+            <div class="tiny" style="margin-bottom:6px">Secrets: ${(env.secretsHandling?.approach ?? "--")}</div>
+            <div class="tiny">Deployment: ${(env.deployment?.model ?? "--")}</div>
+          `
+          : "<div class='tiny'>Environment blueprint is loading…</div>";
+
+        $("pgFeatures").innerHTML = features.length
+          ? features.slice(0, 120).map((feature) => `
+              <div class="route-card" style="margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;gap:8px">
+                  <div style="font-weight:700">${feature.featureId} · ${feature.title}</div>
+                  <span class="severity-badge ${feature.status === "complete" ? "low" : feature.status === "blocked" ? "critical" : "medium"}">${feature.status}</span>
+                </div>
+                <div class="tiny" style="margin-top:4px">${feature.moduleName} · ${feature.phase} · ${feature.apiSpec?.method} ${feature.apiSpec?.path}</div>
+                <div class="tiny" style="margin-top:4px;color:var(--muted)">UI: ${(feature.uiImpact?.pages ?? []).join(", ")} · Data: ${(feature.dataModelChanges?.entities ?? []).join(", ")}</div>
+              </div>
+            `).join("")
+          : "<div class='tiny'>No contracts match current filters.</div>";
+
+        $("pgPolicy").innerHTML = policy
+          ? `
+            <div class="tiny" style="margin-bottom:6px">${policy.description}</div>
+            <div class="tiny">Blocked terms: ${(policy.blockedTerms ?? []).join(", ")}</div>
+          `
+          : "<div class='tiny'>Policy is loading…</div>";
+      }
+
       /* ── MASTER RENDER ── */
       function renderAll(state) {
         latestState = state;
@@ -2805,6 +2976,7 @@
         else if (activePage === "portfolio") renderPortfolioPage(state);
         else if (activePage === "strategy-lab") renderStrategyLab(state);
         else if (activePage === "academy") renderAcademy(state);
+        else if (activePage === "program") renderProgram(state);
       }
 
       /* ── EVENTS ── */
@@ -2920,6 +3092,35 @@
         } catch (error) {
           status.style.color = "#ff92aa";
           status.textContent = error.message;
+        }
+      });
+      $("pgRefresh").addEventListener("click", async () => {
+        try {
+          await refreshProgramFeatures(true);
+          if (latestState) renderProgram(latestState);
+        } catch (error) {
+          $("pgSummary").textContent = error.message;
+        }
+      });
+      ["pgModule", "pgPhase", "pgStatus"].forEach((id) => {
+        $(id).addEventListener("change", async () => {
+          try {
+            programFeaturesCache = [];
+            await refreshProgramFeatures(true);
+            if (latestState) renderProgram(latestState);
+          } catch (error) {
+            $("pgSummary").textContent = error.message;
+          }
+        });
+      });
+      $("pgSearch").addEventListener("keydown", async (event) => {
+        if (event.key !== "Enter") return;
+        try {
+          programFeaturesCache = [];
+          await refreshProgramFeatures(true);
+          if (latestState) renderProgram(latestState);
+        } catch (error) {
+          $("pgSummary").textContent = error.message;
         }
       });
       $("openTradeFlowFromTrading").addEventListener("click", () => {
@@ -3163,6 +3364,11 @@
         });
       refreshMissionBoard().catch(() => {});
       refreshAcademy().catch(() => {});
+      refreshProgramBundle()
+        .then(() => refreshProgramFeatures(true))
+        .catch((error) => {
+          $("pgSummary").textContent = error.message;
+        });
 
       /* ── SSE ── */
       const stream = new EventSource("/api/stream");
@@ -3170,6 +3376,9 @@
         renderAll(JSON.parse(e.data));
         refreshMissionBoard().catch(() => {});
         refreshAcademy().catch(() => {});
+        if ((document.querySelector(".tab.active")?.dataset?.tab ?? "") === "program") {
+          refreshProgramFeatures(true).catch(() => {});
+        }
       };
       stream.onerror = () => {
         $("tradeStatus").textContent = "Stream disconnected. Reconnecting...";

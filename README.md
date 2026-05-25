@@ -76,6 +76,13 @@ This repository now contains an executable V10 foundation for a realistic global
   - One-call multi-tick scenario execution with run summaries and macro deltas
   - Scenario run history for replay/debug workflows
 - Automated tests for determinism, matching behavior, bounded indicators, event coupling, and mergers
+- Mega Program expansion layer
+  - 10-module feature contract system with 120+ scoped features
+  - No-courses policy guardrails for expansion backlog
+  - Environment blueprint for dev/staging/prod runtime, config, secrets, logging, and deployment model
+  - Program milestones and contract explorer APIs
+  - Program operations dashboard page for realtime contract browsing
+  - API hardening with optional admin bearer-token guard and in-memory rate limiting
 
 ## Project Structure
 
@@ -145,6 +152,15 @@ npm run simulate
 - `GET /api/insights/strategy-playbooks` — available strategy playbooks for lab backtests
 - `POST /api/insights/backtest` — run deterministic strategy backtest (`playbookId`, `horizonTicks`, `capital`, optional `companyIds`)
 - `GET /api/insights/academy` — academy tracks, featured lessons, and mastery snapshot
+- `GET /api/program/overview` — mega program module + feature summary
+- `GET /api/program/modules` — module catalog with feature counts
+- `GET /api/program/features?module=<id>&phase=<phase>&status=<status>&search=<text>&limit=<n>` — feature contracts filtered query
+- `GET /api/program/feature-contract?featureId=<id>` — detailed feature contract lookup
+- `GET /api/program/milestones` — phase gates and module coverage
+- `GET /api/program/environment` — environment/runtime/config/secrets/logging/deployment blueprint
+- `GET /api/program/no-courses-policy` — no-courses expansion rule metadata
+- `GET /api/program/health` — program ops telemetry snapshot
+- `POST /api/admin/program/feature-status` — update feature status override (requires bearer token when `ADMIN_BEARER_TOKEN` is configured)
 - `POST /api/company` — create company (supports playerOwned/principalStakePct)
 - `POST /api/order` — place order
 - `POST /api/stock/control` — tune stock stability/support/resistance (plus strength parameters)
