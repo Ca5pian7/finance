@@ -1,6 +1,7 @@
 import { createRng } from "./random.js";
 import { ensureAnalyticsState, recordPlayerTradeSettlement, refreshMarketAnalytics, refreshPlayerAnalytics } from "./analytics.js";
 import { calculatePeRatio } from "./state.js";
+import { ensureV11State, processV11EventBus, runV11SystemsTick } from "./v11.js";
 
 const STOCK_DAY_TICKS = 300;
 const SIM_MS_PER_TICK = Math.round((24 * 60 * 60 * 1000) / STOCK_DAY_TICKS);
@@ -615,6 +616,24 @@ function updateCompany(state, companyId, rng) {
   company.innovation = bounded(company.innovation + rdBoost * 0.02 + (rng() - 0.5) * 0.03, 0, 1);
   company.reputation = bounded(company.reputation + (rng() - 0.5) * 0.04 + state.sentiment * 0.02, 0, 1);
   company.aiCapability = bounded(company.aiCapability + company.rdBudget * 0.008, 0, 1);
+  company.lifecycle = company.lifecycle ?? {
+    rdIntensity: company.rdBudget,
+    productVelocity: 0.5,
+    supplyChainMaturity: 0.48,
+    lobbyingPower: 0.18,
+    mnaReadiness: 0.24,
+    ipoReadiness: 0.22
+  };
+  company.lifecycle.rdIntensity = bounded(company.rdBudget, 0.01, 0.5);
+  company.lifecycle.productVelocity = bounded(company.lifecycle.productVelocity + company.innovation * 0.002, 0, 1);
+  company.lifecycle.supplyChainMaturity = bounded(
+    company.lifecycle.supplyChainMaturity + (1 - company.supplyRisk) * 0.003 - state.supplyChains.pressure * 0.002,
+    0,
+    1
+  );
+  company.lifecycle.lobbyingPower = bounded(company.lifecycle.lobbyingPower + company.politicalInfluence * 0.003, 0, 1);
+  company.lifecycle.mnaReadiness = bounded(company.lifecycle.mnaReadiness + company.marketDominance * 0.002, 0, 1);
+  company.lifecycle.ipoReadiness = bounded(company.lifecycle.ipoReadiness + company.reputation * 0.002, 0, 1);
   company.valuation = Number(Math.max(1_000_000, company.valuation * (1 + company.kpis.growth * 0.03 + company.kpis.profitMargin * 0.01)).toFixed(2));
 
   const intrinsicPrice = Math.max(0.1, company.valuation / stock.sharesOutstanding);
@@ -1030,6 +1049,7 @@ export function executeMerger(state, { buyerId, targetId }) {
 export function executeStrategicAction(state, payload = {}) {
   const actionType = payload.actionType;
   const intensity = bounded(Number(payload.intensity ?? 1), 0.5, 5);
+  ensureV11State(state);
 
   switch (actionType) {
     case "LAUNCH_PRODUCT": {
@@ -1094,6 +1114,29 @@ export function executeStrategicAction(state, payload = {}) {
       state.policyPressure = bounded(state.policyPressure + 0.03 * intensity, 0, 1);
       pushHeadline(state, `${company.name} gains policy influence in ${country}`, 0.01);
       return { actionType, companyId: company.id, country, status: "ok" };
+    }
+    case "SET_POLICY": {
+      const country = String(payload.country ?? "USA");
+      const government = state.governments?.[country];
+      if (!government) throw new Error("Unknown government");
+      if (payload.taxRate !== undefined) {
+        government.taxRate = bounded(Number(payload.taxRate), 0.05, 0.65);
+      }
+      if (payload.subsidy !== undefined) {
+        government.subsidy = bounded(Number(payload.subsidy), 0, 0.25);
+      }
+      if (payload.regulation !== undefined) {
+        government.regulation = bounded(Number(payload.regulation), 0, 1);
+      }
+      processV11EventBus(state, [
+        {
+          type: "TAX_CHANGE",
+          source: "policy-action",
+          payload: { country, taxes: government.taxRate }
+        }
+      ]);
+      pushHeadline(state, `Policy board updates tax and subsidy levers in ${country}`, -0.005);
+      return { actionType, country, taxRate: government.taxRate, subsidy: government.subsidy, regulation: government.regulation, status: "ok" };
     }
     case "CREATE_MONOPOLY": {
       const company = requireCompany(state, payload.companyId);
@@ -1178,6 +1221,44 @@ export function executeStrategicAction(state, payload = {}) {
       company.valuation = Number((company.valuation * 0.78 + stock.marketCap * 0.22).toFixed(2));
       pushHeadline(state, `${company.name} executes a ${buybackPct.toFixed(2)}% share buyback`, 0.02);
       return { actionType, companyId: company.id, sharesToRetire, buybackPct: Number(buybackPct.toFixed(2)), status: "ok" };
+    }
+    case "CREATE_AUCTION": {
+      const company = requireCompany(state, payload.companyId);
+      const auctions = state.v11.markets.auctions;
+      const reservePrice = Math.max(10_000, Number(payload.reservePrice ?? company.valuation * 0.04));
+      const commissionRate = bounded(Number(payload.commissionRate ?? 0.012), 0.002, 0.08);
+      const auctionFeeRate = bounded(Number(payload.auctionFeeRate ?? 0.004), 0.001, 0.04);
+      const listing = {
+        id: `auc-${state.tick}-${auctions.listings.length + auctions.settled.length + 1}`,
+        assetClass: String(payload.assetClass ?? "company-stake"),
+        auctionType: String(payload.auctionType ?? "live"),
+        ownerCompanyId: company.id,
+        title: String(payload.title ?? `${company.name} strategic asset lot`),
+        reservePrice: Number(reservePrice.toFixed(2)),
+        currentBid: Number(reservePrice.toFixed(2)),
+        bidCount: 0,
+        speculation: bounded(Number(payload.speculation ?? 0.45), 0, 1),
+        fraudRisk: bounded(Number(payload.fraudRisk ?? 0.12), 0, 1),
+        commissionRate,
+        auctionFeeRate,
+        endsAtTick: state.tick + Math.max(1, Math.round(Number(payload.durationTicks ?? 3)))
+      };
+      auctions.listings.unshift(listing);
+      auctions.listings = auctions.listings.slice(0, 200);
+      pushHeadline(state, `${company.name} lists ${listing.assetClass} in a global ${listing.auctionType} auction`, 0.01);
+      return { actionType, auctionId: listing.id, endsAtTick: listing.endsAtTick, status: "ok" };
+    }
+    case "FORM_ALLIANCE": {
+      const allianceName = String(payload.name ?? `alliance-${state.tick}`);
+      const members = Array.isArray(payload.members) ? payload.members.map((m) => String(m)) : [];
+      state.v11.multiplayer.alliances.unshift({
+        id: `alliance-${state.tick}-${state.v11.multiplayer.alliances.length + 1}`,
+        name: allianceName,
+        members,
+        createdTick: state.tick
+      });
+      state.v11.multiplayer.alliances = state.v11.multiplayer.alliances.slice(0, 80);
+      return { actionType, name: allianceName, members, status: "ok" };
     }
     case "PRICE_WAR":
     case "COMPETE_PRICE_WAR": {
@@ -1280,6 +1361,7 @@ export function runTick(state, { events = [] } = {}) {
   }
   ensureAnalyticsState(state);
   ensureFinancialSystemState(state);
+  ensureV11State(state);
   if (!Number.isFinite(state.player?.cash)) state.player.cash = 50_000_000_000;
   if (!Number.isFinite(state.player?.netWorth)) state.player.netWorth = state.player.cash;
   if (!Array.isArray(state.player?.companyIds)) state.player.companyIds = [];
@@ -1317,6 +1399,7 @@ export function runTick(state, { events = [] } = {}) {
   const rng = createRng(state.seed + state.tick);
 
   for (const event of events) applyEvent(state, event);
+  processV11EventBus(state, events);
   updateCommodities(state, rng);
   updateMacro(state, rng);
   state.marketRegime = resolveMarketRegime(state, rng);
@@ -1324,6 +1407,7 @@ export function runTick(state, { events = [] } = {}) {
   state.supplyChains.pressure = bounded(state.supplyChains.pressure * 0.985, 0, 1);
   state.geopolitics.tension = bounded(state.geopolitics.tension * 0.992, 0, 1);
   applyGovernmentDrift(state, rng);
+  runV11SystemsTick(state, createRng(state.seed * 97 + state.tick * 13 + 11));
 
   for (const companyId of Object.keys(state.companies)) {
     if (!state.orderBooks[companyId]) state.orderBooks[companyId] = { buy: [], sell: [] };

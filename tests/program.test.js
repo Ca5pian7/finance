@@ -6,6 +6,7 @@ import {
   getProgramMilestones,
   getProgramNoCoursesPolicy,
   getProgramOverview,
+  getProgramV11Scope,
   getProgramPhaseBoard,
   listProgramFeatureContracts,
   listProgramModules,
@@ -108,4 +109,13 @@ test("phase board and operational artifacts are populated", () => {
   const checkpoints = listProgramReleaseCheckpoints();
   assert.equal(checkpoints.length, 5);
   assert.ok(checkpoints.every((checkpoint) => checkpoint.requirements.length >= 5));
+});
+
+test("v11 scope exposes staged tracks and vertical slices", () => {
+  const scope = getProgramV11Scope();
+  assert.equal(scope.version, "v11");
+  assert.equal(scope.rolloutModel, "vertical-slices");
+  assert.equal(scope.tracks.length, 6);
+  assert.ok(scope.tracks.every((track) => Array.isArray(track.acceptanceGates) && track.acceptanceGates.length >= 3));
+  assert.ok(scope.verticalSlices.length >= 3);
 });

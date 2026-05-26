@@ -4,6 +4,7 @@ import { computeCompanyIntel, refreshMarketAnalytics, refreshPlayerAnalytics } f
 import { executeMerger, executeStrategicAction, placeOrder, runTick, squareOffPosition } from "../src/simulator/engine.js";
 import { listScenarioBlueprints, runScenarioPlaybook } from "../src/simulator/scenario-lab.js";
 import { calculatePeRatio, createCompany, createInitialState, upsertCompany } from "../src/simulator/state.js";
+import { getV11EventContract } from "../src/simulator/v11.js";
 
 test("simulation is deterministic for same seed and event sequence", () => {
   const a = createInitialState({ seed: 123 });
@@ -675,4 +676,73 @@ test("scenario lab can execute a scenario playbook and record history", () => {
 test("scenario lab rejects unknown scenario ids", () => {
   const state = createInitialState({ seed: 116 });
   assert.throws(() => runScenarioPlaybook(state, { scenarioId: "NOT_REAL" }), /Unknown scenario/);
+});
+
+test("v11 bounded domains initialize with staged economy/world modules", () => {
+  const state = createInitialState({ seed: 117 });
+  assert.equal(state.v11.version, "v11");
+  assert.ok(Array.isArray(state.v11.world.cities));
+  assert.ok(state.v11.world.cities.length >= 10);
+  const city = state.v11.world.cities[0];
+  assert.ok(Number.isFinite(city.population));
+  assert.ok(Number.isFinite(city.gdp));
+  assert.ok(Number.isFinite(city.aiAutomationLevel));
+  assert.ok(state.v11.world.countries.USA);
+  assert.ok(Number.isFinite(state.v11.world.countries.USA.taxes));
+});
+
+test("v11 event bus contract and ripple handling are deterministic", () => {
+  const a = createInitialState({ seed: 118 });
+  const b = createInitialState({ seed: 118 });
+  upsertCompany(a, createCompany({ id: "v11-a", name: "Event Alpha", country: "USA", sector: "AI", businessModel: "SaaS" }));
+  upsertCompany(b, createCompany({ id: "v11-a", name: "Event Alpha", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  const contract = getV11EventContract();
+  assert.equal(contract.version, "v11.0");
+  assert.ok(contract.requiredFields.includes("type"));
+
+  runTick(a, { events: [{ type: "WAR", region: "Logistics Arc" }, { type: "RATE_HIKE" }] });
+  runTick(b, { events: [{ type: "WAR", region: "Logistics Arc" }, { type: "RATE_HIKE" }] });
+
+  assert.equal(a.v11.events.history.length, b.v11.events.history.length);
+  assert.equal(a.v11.events.socialSignals.panic, b.v11.events.socialSignals.panic);
+  assert.equal(a.v11.economy.recessionRisk, b.v11.economy.recessionRisk);
+  assert.ok(a.v11.events.newsFeed.length >= 1);
+});
+
+test("v11 auction strategic action creates and settles auction listings", () => {
+  const state = createInitialState({ seed: 119 });
+  upsertCompany(state, createCompany({ id: "auc", name: "Auction Prime", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  const listing = executeStrategicAction(state, {
+    actionType: "CREATE_AUCTION",
+    companyId: "auc",
+    assetClass: "patent",
+    auctionType: "blind",
+    durationTicks: 1
+  });
+
+  assert.equal(listing.status, "ok");
+  assert.equal(state.v11.markets.auctions.listings.length, 1);
+  runTick(state);
+  assert.equal(state.v11.markets.auctions.listings.length, 0);
+  assert.ok(state.v11.markets.auctions.settled.length >= 1);
+});
+
+test("v11 policy action updates government and emits policy event effects", () => {
+  const state = createInitialState({ seed: 120 });
+  upsertCompany(state, createCompany({ id: "plc", name: "Policy Tech", country: "USA", sector: "AI", businessModel: "SaaS" }));
+
+  const outcome = executeStrategicAction(state, {
+    actionType: "SET_POLICY",
+    companyId: "plc",
+    country: "USA",
+    taxRate: 0.31,
+    subsidy: 0.05,
+    regulation: 0.42
+  });
+
+  assert.equal(outcome.status, "ok");
+  assert.equal(state.governments.USA.taxRate, 0.31);
+  assert.ok(state.v11.events.history.some((event) => event.type === "TAX_CHANGE"));
 });
