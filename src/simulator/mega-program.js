@@ -4,6 +4,7 @@ import {
   listExpandedProgramModules,
   listExpandedProgramRunbooks
 } from "./program-backlog.js";
+import { getV11ProgramScope } from "./v11.js";
 
 const PHASES = ["phase-1", "phase-2", "phase-3", "phase-4", "phase-5"];
 const STATUSES = ["planned", "in-progress", "review", "complete", "blocked"];
@@ -225,6 +226,7 @@ export function getProgramPhaseBoard() {
 
 export function getProgramOverview() {
   const modules = listProgramModules();
+  const v11Scope = getV11ProgramScope();
   const phaseBreakdown = Object.fromEntries(PHASES.map((phase) => [phase, 0]));
   const statusBreakdown = Object.fromEntries(STATUSES.map((status) => [status, 0]));
   const moduleBreakdown = Object.fromEntries(modules.map((module) => [module.id, 0]));
@@ -238,6 +240,8 @@ export function getProgramOverview() {
   });
 
   return {
+    version: v11Scope.version,
+    rolloutModel: v11Scope.rolloutModel,
     totalModules: modules.length,
     totalFeatures: EXPANDED_FEATURES.length,
     totalRunbooks: EXPANDED_RUNBOOKS.length,
@@ -248,8 +252,14 @@ export function getProgramOverview() {
     moduleBreakdown,
     categoryBreakdown,
     milestones: getProgramMilestones(),
-    noCoursesPolicy: getProgramNoCoursesPolicy()
+    noCoursesPolicy: getProgramNoCoursesPolicy(),
+    v11Tracks: v11Scope.tracks,
+    v11VerticalSlices: v11Scope.verticalSlices
   };
+}
+
+export function getProgramV11Scope() {
+  return getV11ProgramScope();
 }
 
 export function getProgramHealth({ requestCount = 0, streamClientCount = 0, uptimeMs = 0, rateLimitedCount = 0, errorCount = 0 } = {}) {

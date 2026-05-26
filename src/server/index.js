@@ -14,12 +14,14 @@ import {
   getProgramMilestones,
   getProgramNoCoursesPolicy,
   getProgramOverview,
+  getProgramV11Scope,
   getProgramPhaseBoard,
   listProgramReleaseCheckpoints,
   listProgramRunbooks,
   listProgramFeatureContracts,
   listProgramModules
 } from "../simulator/mega-program.js";
+import { ensureV11State, getV11EventContract } from "../simulator/v11.js";
 
 const PORT = Number(process.env.PORT || 3000);
 const publicDir = path.resolve(process.cwd(), "src/web");
@@ -43,6 +45,7 @@ const appRoutes = new Set([
 
 const state = loadCheckpoint() ?? createInitialState({ seed: 7 });
 if (!Object.keys(state.companies).length) createSeedCompanies(state, 16);
+ensureV11State(state);
 refreshPlayerAnalytics(state);
 refreshMarketAnalytics(state);
 
@@ -192,12 +195,17 @@ function getSnapshot() {
       stats: state.financialSystem?.stats ?? {}
     },
     program: {
+      version: overview.version ?? "v11",
+      rolloutModel: overview.rolloutModel ?? "vertical-slices",
       totalModules: overview.totalModules,
       totalFeatures: overview.totalFeatures,
       phaseBreakdown: overview.phaseBreakdown,
       statusBreakdown: overview.statusBreakdown,
-      noCoursesPolicy: overview.noCoursesPolicy
-    }
+      noCoursesPolicy: overview.noCoursesPolicy,
+      v11Tracks: overview.v11Tracks ?? [],
+      v11VerticalSlices: overview.v11VerticalSlices ?? []
+    },
+    v11: state.v11
   };
 }
 
@@ -367,6 +375,19 @@ const server = http.createServer(async (req, res) => {
           errorCount: requestCounters.errors
         })
       );
+    }
+
+    if (url.pathname === "/api/program/v11-scope" && req.method === "GET") {
+      return sendJson(res, 200, getProgramV11Scope());
+    }
+
+    if (url.pathname === "/api/v11/event-contract" && req.method === "GET") {
+      return sendJson(res, 200, getV11EventContract());
+    }
+
+    if (url.pathname === "/api/v11/state" && req.method === "GET") {
+      ensureV11State(state);
+      return sendJson(res, 200, state.v11);
     }
 
     if (url.pathname === "/api/admin/program/feature-status" && req.method === "POST") {

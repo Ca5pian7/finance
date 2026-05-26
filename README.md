@@ -78,11 +78,19 @@ This repository now contains an executable V10 foundation for a realistic global
 - Automated tests for determinism, matching behavior, bounded indicators, event coupling, and mergers
 - Mega Program expansion layer
   - 10-module feature contract system with 120+ scoped features
+  - V11 staged scope metadata (engine, economy, world, corporations, multiplayer, UI tracks) with strict acceptance gates
+  - Vertical-slice rollout model for deterministic release gating
   - No-courses policy guardrails for expansion backlog
   - Environment blueprint for dev/staging/prod runtime, config, secrets, logging, and deployment model
   - Program milestones and contract explorer APIs
   - Program operations dashboard page for realtime contract browsing
   - API hardening with optional admin bearer-token guard and in-memory rate limiting
+- V11 domain simulation foundation
+  - Bounded domain state modules (world, economy, actors, markets, events, multiplayer, ops)
+  - Unified V11 event contract + queue-based event bus for cross-system ripple effects
+  - Layered economy updates (labor, debt/liquidity, housing, recession/bubble regime)
+  - Global auction subsystem (asset classes, auction modes, fraud risk, broker fee accounting)
+  - Disaster/black swan orchestration with deterministic event integration
 
 ## Project Structure
 
@@ -163,7 +171,10 @@ npm run simulate
 - `GET /api/program/environment` — environment/runtime/config/secrets/logging/deployment blueprint
 - `GET /api/program/no-courses-policy` — no-courses expansion rule metadata
 - `GET /api/program/health` — program ops telemetry snapshot
+- `GET /api/program/v11-scope` — V11 track and vertical-slice scope definition
 - `POST /api/admin/program/feature-status` — update feature status override (requires bearer token when `ADMIN_BEARER_TOKEN` is configured)
+- `GET /api/v11/event-contract` — V11 unified event contract schema
+- `GET /api/v11/state` — V11 bounded-domain runtime state snapshot
 - `POST /api/company` — create company (supports playerOwned/principalStakePct)
 - `POST /api/order` — place order
 - `POST /api/stock/control` — tune stock stability/support/resistance (plus strength parameters)

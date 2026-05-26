@@ -1,5 +1,6 @@
 import { COMMODITIES, COUNTRIES, COUNTRY_PROFILES, DEFAULT_MACRO, SECTORS, SUPPLY_REGIONS } from "./constants.js";
 import { createRng, pick } from "./random.js";
+import { createV11DomainState } from "./v11.js";
 
 export function calculatePeRatio({ marketCap, revenue, profitMargin }) {
   const earnings = Number(revenue) * Number(profitMargin);
@@ -140,7 +141,8 @@ export function createInitialState({ seed = 42 } = {}) {
         summary: {}
       },
       market: {}
-    }
+    },
+    v11: createV11DomainState()
   };
 }
 
@@ -206,6 +208,14 @@ export function createCompany({
     politicalInfluence: 0.1,
     supplyRisk: 0.2,
     carbonEmissions: Math.round(employees * 0.6),
+    lifecycle: {
+      rdIntensity: rdBudget,
+      productVelocity: 0.5,
+      supplyChainMaturity: 0.48,
+      lobbyingPower: 0.18,
+      mnaReadiness: 0.24,
+      ipoReadiness: 0.22
+    },
     kpis: {
       revenue: initialRevenue,
       profitMargin: initialProfitMargin,
