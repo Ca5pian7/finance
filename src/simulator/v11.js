@@ -467,6 +467,7 @@ function updateAuctions(state, rng) {
 }
 
 function maybeTriggerDisaster(state, rng) {
+  if (state.tick % 24 !== 0) return;
   const engine = state.v11.events.disasterEngine;
   const probability = bounded(engine.baseProbability + engine.intensity * 0.004 + state.v11.world.governance.globalPolicyPulse * 0.001, 0, 0.08);
   if (rng() >= probability) return;

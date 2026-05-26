@@ -625,15 +625,15 @@ function updateCompany(state, companyId, rng) {
     ipoReadiness: 0.22
   };
   company.lifecycle.rdIntensity = bounded(company.rdBudget, 0.01, 0.5);
-  company.lifecycle.productVelocity = bounded(company.lifecycle.productVelocity + company.innovation * 0.002 + (rng() - 0.5) * 0.01, 0, 1);
+  company.lifecycle.productVelocity = bounded(company.lifecycle.productVelocity + company.innovation * 0.002, 0, 1);
   company.lifecycle.supplyChainMaturity = bounded(
-    company.lifecycle.supplyChainMaturity + (1 - company.supplyRisk) * 0.003 - state.supplyChains.pressure * 0.002 + (rng() - 0.5) * 0.008,
+    company.lifecycle.supplyChainMaturity + (1 - company.supplyRisk) * 0.003 - state.supplyChains.pressure * 0.002,
     0,
     1
   );
-  company.lifecycle.lobbyingPower = bounded(company.lifecycle.lobbyingPower + company.politicalInfluence * 0.003 + (rng() - 0.5) * 0.006, 0, 1);
-  company.lifecycle.mnaReadiness = bounded(company.lifecycle.mnaReadiness + company.marketDominance * 0.002 + (rng() - 0.5) * 0.006, 0, 1);
-  company.lifecycle.ipoReadiness = bounded(company.lifecycle.ipoReadiness + company.reputation * 0.002 + (rng() - 0.5) * 0.006, 0, 1);
+  company.lifecycle.lobbyingPower = bounded(company.lifecycle.lobbyingPower + company.politicalInfluence * 0.003, 0, 1);
+  company.lifecycle.mnaReadiness = bounded(company.lifecycle.mnaReadiness + company.marketDominance * 0.002, 0, 1);
+  company.lifecycle.ipoReadiness = bounded(company.lifecycle.ipoReadiness + company.reputation * 0.002, 0, 1);
   company.valuation = Number(Math.max(1_000_000, company.valuation * (1 + company.kpis.growth * 0.03 + company.kpis.profitMargin * 0.01)).toFixed(2));
 
   const intrinsicPrice = Math.max(0.1, company.valuation / stock.sharesOutstanding);
@@ -1407,7 +1407,7 @@ export function runTick(state, { events = [] } = {}) {
   state.supplyChains.pressure = bounded(state.supplyChains.pressure * 0.985, 0, 1);
   state.geopolitics.tension = bounded(state.geopolitics.tension * 0.992, 0, 1);
   applyGovernmentDrift(state, rng);
-  runV11SystemsTick(state, rng);
+  runV11SystemsTick(state, createRng(state.seed * 97 + state.tick * 13 + 11));
 
   for (const companyId of Object.keys(state.companies)) {
     if (!state.orderBooks[companyId]) state.orderBooks[companyId] = { buy: [], sell: [] };
